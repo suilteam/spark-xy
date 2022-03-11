@@ -473,6 +473,109 @@ namespace suil {
 
     inline std::size_t tid() noexcept { return std::hash<std::thread::id>{}(std::this_thread::get_id()); }
     uint16_t  mtid() noexcept;
+
+    /**
+     * @brief Converts a string to a decimal number. Floating point
+     * numbers are not supported
+     * @param str the string to convert to a number
+     * @param base the numbering base to the string is in
+     * @param min expected minimum value
+     * @param max expected maximum value
+     * @return a number converted from given string
+     */
+    int64_t strtonum(const std::string_view& str, int base, long long int min, long long int max);
+
+    /**
+    * converts the given string to a number
+    * @tparam T the type of number to convert to
+    * @param str the string to convert to a number
+    * @return the converted number
+    *
+    * @throws \class Exception when the string is not a valid number
+    */
+    template<std::integral T>
+    auto to_number(const std::string_view& str) -> T {
+        return T(suil::strtonum(str, 10, INT64_MIN, INT64_MAX));
+    }
+
+    /**
+     * converts the given string to a number
+     * @tparam T the type of number to convert to
+     * @param str the string to convert to a number
+     * @return the converted number
+     *
+     * @throws runtime_error when the string is not a valid number
+     */
+    template<std::floating_point T>
+    auto to_number(const std::string_view& str) -> T {
+        double f;
+        char *end;
+        f = strtod(str.data(), &end);
+        if (errno || *end != '\0')  {
+            throw std::runtime_error(errno_s);
+        }
+        return (T) f;
+    }
+
+    /**
+     * convert given number to string
+     * @tparam T the type of number to convert
+     * @param v the number to convert
+     * @return converts the number to string using std::to_string
+     */
+    template<arithmetic T>
+    inline auto tostr(T v) -> std::string {
+        return std::to_string(v);
+    }
+
+    /**
+     * converts given string to string
+     * @param str
+     * @return a peek of the given string
+     */
+    inline std::string tostr(const std::string_view& str) {
+        return std::string{str};
+    }
+
+    /**
+     * converts the given c-style string to a \class String
+     * @param str the c-style string to convert
+     * @return a \class String which is a duplicate of the
+     * given c-style string
+     */
+    inline std::string tostr(const char *str) {
+        return std::string{str};
+    }
+
+    /**
+     * cast \class String to number of given type
+     * @tparam T the type of number to cast to
+     * @param data the string to cast
+     * @param to the reference that will hold the result
+     */
+    template <arithmetic T>
+    inline void cast(const std::string_view& data, T& to) {
+        to = suil::to_number<T>(data);
+    }
+
+    /**
+     * cast the given \class String to a boolean
+     * @param data the string to cast
+     * @param to reference to hold the result. Will be true if the string is
+     * 'true' or '1'
+     */
+    inline void cast(const std::string_view& data, bool& to) {
+        to = ((strcasecmp(data.data(), "1") == 0) ||
+              (strcasecmp(data.data(), "true") == 0));
+    }
+
+    /**
+     * @brief
+     * @param data the string to cast
+     * @param to reference to hold the result. Will be true if the string is
+     * 'true' or '1'
+     */
+    std::string_view trim(const std::string_view& data);
 }
 
 /**
@@ -480,20 +583,19 @@ namespace suil {
 * The scoped resource must have a method close() which will be invoked at the end
 * of the scope
 */
-#define scoped(n, x) auto& n = x ; suil::internal::scoped_res<decltype( n )> _##n { n }
+#define scoped(n, x) auto& ##n = x ; suil::internal::scoped_res<decltype( n )> _##n { n }
 
 #define scope(x) suil::internal::scoped_res<decltype( x )> SUIL_XPASTE(_scope, __LINE__) { x }
 
 /**
  * Defers execution of the given code block to the end of the block in which it is defined
- * @param the name of the defer block
- * @param f the code block to execute at the end of the block
+ * @param N the name of the defer block
+ * @param F the code block to execute at the end of the block
  */
-#define vdefer(n, f) suil::internal::_defer _##n {[&]() f }
+#define vdefer(N, F) suil::internal::_defer _##N {[&]() F }
 
 /**
  * Defers execution of the given code block to the end of the block in which it is defined
- * @param the name of the defer block
- * @param f the code block to execute at the end of the block
+ * @param F the code block to execute at the end of the block
  */
-#define defer(f) suil::internal::_defer SUIL_XPASTE(_def, __LINE__) {[&]() f }
+#define defer(F) suil::internal::_defer SUIL_XPASTE(_def, __LINE__) {[&]() F }

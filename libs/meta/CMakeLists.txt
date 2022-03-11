@@ -22,12 +22,12 @@ set(SUIL_META_SOURCES
         src/meta.cpp)
 
 # Add and configure Meta shared library
-SuilAddLibrary(Meta
+SuilAddBinary(Meta
         KIND SHARED
         SOURCES  ${SUIL_META_SOURCES}
         OPTIONS  PRIVATE -Wall -Wextra -pedantic -Werror -fno-rtti -g -O3
-        RENAME   SuilMeta
-        LIBS     Suil::Utils)
+        RENAME   suil-meta
+        LIBS     cppast Suil::Utils)
 
 if (ENABLE_UNIT_TESTS)
     include_directories(test)

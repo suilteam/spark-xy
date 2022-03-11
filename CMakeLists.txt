@@ -54,6 +54,7 @@ set(CMAKE_MODULE_PATH
 include(cmake/SuilUtils.cmake)
 include(cmake/SuilGetOsVariant.cmake)
 include(cmake/SuilAddLibrary.cmake)
+include(cmake/SuilAddBinary.cmake)
 include(cmake/SuilGccPlugin.cmake)
 
 if (ENABLE_UNIT_TESTS)

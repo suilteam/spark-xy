@@ -8,18 +8,15 @@
 # \group:DEFINES A list compile definitions needed by the target
 # \kv:RENAME the output name of the libary
 #
-function(SuilAddLibrary name)
-    set(KV_ARGS    RENAME KIND)
+function(SuilAddBinary name)
+    set(KV_ARGS    RENAME)
     set(GROUP_ARGS SOURCES DEPENDS LIBS INCLUDES DEFINES OPTIONS)
     cmake_parse_arguments(SUIL_LIB "" "${KV_ARGS}" "${GROUP_ARGS}" ${ARGN})
     if (NOT name)
         message(FATAL_ERROR "The name of the library is required")
     endif()
-    if (NOT SUIL_LIB_KIND)
-        set(SUIL_LIB_KIND STATIC)
-    endif()
 
-    add_library(${name} ${SUIL_LIB_KIND} ${SUIL_LIB_SOURCES})
+    add_executable(${name} ${SUIL_LIB_KIND} ${SUIL_LIB_SOURCES})
     if (SUIL_LIB_DEPENDS)
         add_dependencies(${name} ${SUIL_LIB_DEPENDS})
     endif()
@@ -42,22 +39,14 @@ function(SuilAddLibrary name)
                     RUNTIME_OUTPUT_NAME ${SUIL_LIB_RENAME})
     endif()
 
-    add_library(Suil::${name} ALIAS ${name})
     # add targets include folder to public include directory
     target_include_directories(${name} PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
             $<INSTALL_INTERFACE:include>)
 
-    # Install library
+    # Install executable
     install(TARGETS ${name}
             EXPORT  ${TARGETS_EXPORT_NAME}
             LIBRARY DESTINATION lib
             ARCHIVE DESTINATION lib)
-
-    string(TOLOWER ${name} _name)
-    # Install includes headers
-    install(DIRECTORY include/suil/${_name}/
-            DESTINATION include/suil/${_name}
-            FILES_MATCHING PATTERN "*.hpp")
-
 endfunction()
