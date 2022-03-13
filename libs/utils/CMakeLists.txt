@@ -19,15 +19,23 @@ endif()
 
 set(SUIL_UTILS_SOURCES
         ${SUIL_PLATFORM_SOURCES}
+        src/args.cpp
+        src/b64.cpp
+        src/console.cpp
+        src/datetime.cpp
         src/exception.cpp
-        src/utils.cpp)
+        src/mbuffer.cpp
+        src/logging.cpp
+        src/url.cpp
+        src/utils.cpp
+        src/uuid.cpp)
 
 # Add and configure utils library
 SuilAddLibrary(Utils
         KIND STATIC
         SOURCES ${SUIL_UTILS_SOURCES}
         RENAME  SuilUtils
-        LIBS OpenSSL::SSL)
+        LIBS OpenSSL::SSL uuid)
 
 if (ENABLE_UNIT_TESTS)
     include_directories(test)
@@ -37,5 +45,5 @@ if (ENABLE_UNIT_TESTS)
                 test/main.cpp
             INCLUDES include
             RENAME  SuilUtilsUt
-            LIBS OpenSSL::SSL)
+            LIBS OpenSSL::SSL uuid)
 endif()

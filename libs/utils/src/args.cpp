@@ -2,15 +2,15 @@
 // Created by Mpho Mbotho on 2021-06-05.
 //
 
-#include "suil/base/args.hpp"
+#include "suil/utils/args.hpp"
+#include "suil/utils/exception.hpp"
 
-#include <suil/base/exception.hpp>
-#include <suil/base/buffer.hpp>
-#include <suil/base/console.hpp>
+#include <iostream>
+#include <sstream>
 
 namespace suil::args {
 
-    Command::Command(String name, String desc, bool help)
+    Command::Command(std::string name, std::string desc, bool help)
         : mName{std::move(name)},
           mDesc{std::move(desc)}
     {
@@ -27,7 +27,7 @@ namespace suil::args {
 
     Command& Command::operator()(Arg&& arg)
     {
-        if (!arg.Lf) {
+        if (arg.Lf.empty()) {
             throw InvalidArguments("Command line argument missing long format (--arg) option");
         }
 
@@ -42,21 +42,21 @@ namespace suil::args {
         auto len = arg.Option? arg.Lf.size(): arg.Lf.size() + 5;
         mLongest = std::max(mLongest, len);
         arg.Global = false;
-        mArgs.emplace_back(std::move(arg));
+        mArgs.emplace_back(arg);
         return Ego;
     }
 
-    void Command::showHelp(String app, Buffer& help, bool isHelp) const
+    void Command::showHelp(const std::string_view& app, std::ostream& os, bool isHelp) const
     {
         if (isHelp) {
-            help << mDesc << "\n\n";
+            os << mDesc << "\n\n";
         }
-        help << "Usage:\n"
-             << "  " << app << " " << mName;
+        os << "Usage:\n"
+           << "  " << app << " " << mName;
         if (!mArgs.empty()) {
-            help << " [flags...]\n"
-                 << "\n"
-                 << "Flags:\n";
+            os << " [flags...]\n"
+               << "\n"
+               << "Flags:\n";
 
             for (auto& arg: mArgs) {
                 if (arg.Global) {
@@ -64,36 +64,35 @@ namespace suil::args {
                 }
 
                 size_t remaining{mLongest+1};
-                help << "    ";
+                os << "    ";
                 if (arg.Sf != NOSF) {
-                    help << '-' << arg.Sf;
-                    help << ", ";
+                    os << '-' << arg.Sf << ", ";
                 } else {
-                    help << "    ";
+                    os << "    ";
                 }
 
-                help << "--" << arg.Lf;
-                help << (arg.Prompt? '?': (arg.Required? '*': ' '));
-                help << (arg.Option? (mTakesArgs? "     ": ""): " arg0");
+                os << "--" << arg.Lf;
+                os << (!arg.Prompt.empty()? '?': (arg.Required? '*': ' '));
+                os << (arg.Option? (mTakesArgs? "     ": ""): " arg0");
 
                 remaining -= arg.Lf.size();
-                help << String{' ', remaining} << arg.Help
-                     << "\n";
+                std::fill_n(std::ostream_iterator<char>(os), remaining, ' ');
+                os << arg.Help << "\n";
             }
         }
         else {
-            help << "\n";
+            os << "\n";
         }
     }
 
-    Arg& Command::check(const String& lf, char sf)
+    Arg& Command::check(const std::string_view& lf, char sf)
     {
         Arg *arg{nullptr};
         if (check(arg, lf, sf)) {
             return *arg;
         }
         else {
-            if (lf) {
+            if (lf.empty()) {
                 throw InvalidArguments("error: command argument '--", lf, "' is not recognized");
             }
             else {
@@ -102,7 +101,7 @@ namespace suil::args {
         }
     }
 
-    bool Command::check(Arg*& found, const String& lf, char sf)
+    bool Command::check(Arg*& found, const std::string_view& lf, char sf)
     {
         for (auto& arg: mArgs) {
             if (arg.check(sf, lf)) {
@@ -116,7 +115,7 @@ namespace suil::args {
     bool Command::parse(int argc, char** argv, bool debug)
     {
         int pos{0};
-        String zArg{};
+        std::string zArg{};
         bool isHelp{false};
 
         while (pos < argc) {
@@ -128,7 +127,7 @@ namespace suil::args {
             }
             if (cArg[0] != '-') {
                 // positional argument
-                Ego.mPositionals.push_back(String{cArg}.dup());
+                Ego.mPositionals.emplace_back(cArg);
                 pos++;
                 continue;
             }
@@ -141,7 +140,7 @@ namespace suil::args {
             if (dashes == 2) {
                 // argument is parsed in Lf
                 auto& arg = Ego.check(&cArg[2], NOSF);
-                if (arg.Prompt) {
+                if (!arg.Prompt.empty()) {
                     throw InvalidArguments("error: command argument '", arg.Lf, "' is supported through prompt");
                 }
 
@@ -153,7 +152,8 @@ namespace suil::args {
                 if (mParsed.find(arg.Lf) != mParsed.end()) {
                     throw InvalidArguments("error: command argument '", arg.Lf, "' was already passed");
                 }
-                String val{"1"};
+
+                std::string val{"1"};
                 if (!arg.Option) {
                     if (cVal == nullptr) {
                         pos++;
@@ -162,24 +162,24 @@ namespace suil::args {
                         }
                         cVal = argv[pos];
                     }
-                    val = String{cVal}.dup();
+                    val = std::string{cVal};
                 }
                 else if (cVal != nullptr) {
                     throw InvalidArguments("error: command argument '", arg.Lf, "' does not take a value");
                 }
-                mParsed.emplace(arg.Lf.peek(), std::move(val));
+                mParsed.emplace(arg.Lf, std::move(val));
             }
             else {
                 size_t nOpts = strlen(cArg);
                 size_t oPos{1};
                 while (oPos < nOpts) {
-                    auto& arg = Ego.check(nullptr, cArg[oPos++]);
+                    auto& arg = Ego.check({}, cArg[oPos++]);
                     if (arg.Sf == 'h') {
                         isHelp = true;
                         break;
                     }
 
-                    String val{"1"};
+                    std::string val{"1"};
                     if (!arg.Option) {
                         if (oPos < nOpts) {
                             throw InvalidArguments("error: command argument '", arg.Lf, "' expects a value");
@@ -193,13 +193,13 @@ namespace suil::args {
                             cVal = argv[pos];
                         }
 
-                        val = String{cVal}.dup();
+                        val = std::string{cVal};
                     }
                     else if (cVal != nullptr) {
                         throw InvalidArguments("error: command argument '", arg.Lf,
                                                "' assigned a value but it's an option");
                     }
-                    mParsed.emplace(arg.Lf.peek(), std::move(val));
+                    mParsed.emplace(arg.Lf, std::move(val));
                 }
 
                 if (isHelp) {
@@ -210,32 +210,32 @@ namespace suil::args {
         }
 
         if (!isHelp) {
-            Buffer msg{127};
-            msg << "error: missing required arguments:";
+            std::stringstream ss;
+            ss << "error: missing required arguments:";
             bool missing{false};
             for (auto& arg: mArgs) {
                 if (!arg.Required or (mParsed.find(arg.Lf) != mParsed.end())) {
                     continue;
                 }
-                if (arg.Prompt) {
+                if (!arg.Prompt.empty()) {
                     // Command argument is interactive, request value from console
                     requestValue(arg);
                 }
                 else {
-                    msg << (missing? ", '" : " '") << arg.Lf << '\'';
+                    ss << (missing? ", '" : " '") << arg.Lf << '\'';
                     missing = true;
                 }
             }
 
             if (missing) {
-                throw InvalidArguments(String{msg});
+                throw InvalidArguments(ss.str());
             }
         }
 
         if (debug) {
             // dump all arguments to console
-            for (auto& kvp: mParsed) {
-                printf("--%s = %s\n", kvp.first(), kvp.second.c_str("nil"));
+            for (auto& [key, value]: mParsed) {
+                std::cout << "--" << key << " = " << value << "\n";
             }
         }
 
@@ -244,7 +244,7 @@ namespace suil::args {
 
     void Command::requestValue(Arg& arg)
     {
-        Status<String> status;
+        Status<std::string> status;
         if (arg.Hidden) {
             status = readPasswd(arg.Prompt);
         }
@@ -255,30 +255,30 @@ namespace suil::args {
             throw InvalidArguments("error: required interactive argument '", arg.Lf, "' not provided");
         }
 
-        mParsed.emplace(arg.Lf.peek(), std::move(status.result));
+        mParsed.emplace(arg.Lf, std::move(status.result));
     }
 
-    String Command::at(int index, const String& errMsg)
+    std::string_view Command::at(int index, const std::string_view& errMsg)
     {
         if (mPositionals.size() <= index) {
-            if (errMsg) {
+            if (!errMsg.empty()) {
                 throw InvalidArguments(errMsg);
             }
             return {};
         }
-        return mPositionals[index].peek();
+        return mPositionals[index];
     }
 
-    String Command::operator[](const String& lf)
+    std::string_view Command::operator[](const std::string_view& lf)
     {
         auto it = mParsed.find(lf);
         if (it != mParsed.end()) {
-            return it->second.peek();
+            return it->second;
         }
         return {};
     }
 
-    int Command::isValid(const String& flag)
+    int Command::isValid(const std::string_view& flag)
     {
         if (flag[0] != '-' || (flag.size() == 1)) {
             return 0;
@@ -295,7 +295,7 @@ namespace suil::args {
         return (flag[2] != '\0' and isalpha(flag[2]))? 2: 0;
     }
 
-    Parser::Parser(String app, String version, String descript)
+    Parser::Parser(std::string app, std::string version, std::string descript)
         : mAppName{std::move(app)},
           mAppVersion{std::move(version)},
           mDescription{std::move(descript)}
@@ -306,12 +306,10 @@ namespace suil::args {
         // add version command
         Command ver{"version", "Show the application version"};
         ver([&](Command& cmd) {
-            Buffer ob{63};
-            ob << mAppName << " v" << mAppVersion << "\n";
+            std::cout << mAppName << " v" << mAppVersion << "\n";
             if (!Ego.mDescription.empty()) {
-                ob << Ego.mDescription << "\n";
+                std::cout << Ego.mDescription << "\n";
             }
-            write(STDOUT_FILENO, ob.data(), ob.size());
         });
         ver.mInternal = true;
 
@@ -326,7 +324,7 @@ namespace suil::args {
         Ego.add(std::move(ver), std::move(help));
     }
 
-    Command* Parser::find(const String &name)
+    Command* Parser::find(const std::string_view& name)
     {
         Command *cmd{nullptr};
         for (auto& c: mCommands) {
@@ -339,7 +337,7 @@ namespace suil::args {
         return cmd;
     }
 
-    Arg* Parser::findArg(const String &name, char sf)
+    Arg* Parser::findArg(const std::string_view& name, char sf)
     {
         for (auto& a: mGlobals) {
             if (a.Lf == name || (sf != NOSF and sf == a.Sf)) {
@@ -349,13 +347,6 @@ namespace suil::args {
         return nullptr;
     }
 
-    Arg Parser::shallowCopy(const Arg &arg)
-    {
-        return std::move(Arg{arg.Lf.peek(), arg.Help.peek(), arg.Sf,
-                             arg.Option, arg.Required, true,
-                             arg.Prompt.peek(), arg.Hidden, arg.Default.peek()});
-    }
-
     Parser& Parser::add(Arg &&arg)
     {
         if (Ego.findArg(arg.Lf) == nullptr) {
@@ -363,7 +354,7 @@ namespace suil::args {
             size_t len = (arg.Option? arg.Lf.size() : arg.Lf.size() + 5);
             mTakesArgs = mTakesArgs || !arg.Option;
             mLongestFlag = std::max(mLongestFlag, len);
-            mGlobals.emplace_back(std::move(arg));
+            mGlobals.push_back(std::move(arg));
         }
         else {
             throw InvalidArguments(
@@ -379,9 +370,8 @@ namespace suil::args {
             for (auto& ga: mGlobals) {
                 Arg* _;
                 if (!cmd.check(_, ga.Lf, ga.Sf)) {
-                    Arg copy = Ego.shallowCopy(ga);
                     cmd.mHasGlobalFlags = true;
-                    cmd.mArgs.emplace_back(std::move(copy));
+                    cmd.mArgs.push_back(ga);
                 }
             }
 
@@ -399,125 +389,109 @@ namespace suil::args {
         return Ego;
     }
 
-    String Parser::getHelp(const char *prefix)
+    void Parser::getHelp(std::ostream& os, const char *prefix)
     {
-        Buffer out{254};
         if (prefix != nullptr) {
-            out << prefix << '\n';
+            os << prefix << '\n';
         }
         else {
-            if (mDescription) {
+            if (!mDescription.empty()) {
                 // show description
-                out << mDescription << '\n';
+                os << mDescription << '\n';
             }
             else {
                 // make up description
-                out << mAppName;
-                if (mAppVersion) {
-                    out << " v" << mAppVersion;
+                os << mAppName;
+                if (!mAppVersion.empty()) {
+                    os << " v" << mAppVersion;
                 }
-                out << '\n';
+                os << '\n';
             }
         }
-        out << '\n';
-
-        out << "Usage:"
-            << "    " << mAppName << " [command ...]\n"
-            << '\n';
+        os << '\n'
+           << "Usage:"
+           << "    " << mAppName << " [command ...]\n"
+           << '\n';
 
         // append commands help
         if (!mCommands.empty()) {
-            out << "Available Commands:\n";
+            os << "Available Commands:\n";
             for (auto& cmd: mCommands) {
                 size_t remaining{mLongestCmd - cmd.mName.size()};
-                out << "  " << cmd.mName << ' ';
+                os << "  " << cmd.mName << ' ';
                 if (cmd.mInteractive) {
-                    out << "(interactive) ";
+                    os << "(interactive) ";
                     remaining -= 14;
                 }
                 if (remaining > 0) {
-                    std::string str;
-                    str.resize(remaining, ' ');
-                    out << str;
+                    std::fill_n(std::ostream_iterator<char>(os), remaining, ' ');
                 }
-                out << cmd.mDesc << '\n';
+                os << cmd.mDesc << '\n';
             }
         }
 
         // append global arguments
         if (!mGlobals.empty()) {
-            out << "Flags:\n";
+            os << "Flags:\n";
             for (auto& ga: mGlobals) {
                 size_t remaining{mLongestFlag - ga.Lf.size()};
-                out << "    ";
+                os << "    ";
                 if (ga.Sf != NOSF) {
-                    out << '-' << ga.Sf;
-                    if (ga.Lf)
-                        out << ", ";
+                    os << '-' << ga.Sf;
+                    if (!ga.Lf.empty())
+                        os << ", ";
                 } else {
-                    out << "    ";
+                    os << "    ";
                 }
 
-                out << "--" << ga.Lf;
-                out << (ga.Prompt? '?': (ga.Required? '*': ' '));
-                out << (ga.Option? (mTakesArgs? "     ": ""): " arg0");
+                os << "--" << ga.Lf;
+                os << (!ga.Prompt.empty()? '?': (ga.Required? '*': ' '));
+                os << (ga.Option? (mTakesArgs? "     ": ""): " arg0");
 
-                std::string str;
-                str.resize(remaining, ' ');
-                out << str << " " << ga.Help;
-                out << "\n";
+                std::fill_n(std::ostream_iterator<char>(os), remaining, ' ');
+                os << " " << ga.Help << "\n";
             }
         }
-        out << '\n'
-            << "Use \"" << mAppName
-            << "\" [command] --help for more information about a command"
-            << "\n\n";
-        return String{out};
+        os << '\n'
+           << "Use \"" << mAppName
+           << "\" [command] --help for more information about a command"
+           << "\n\n";
     }
 
     void Parser::showHelp(const char *prefix) {
-
-        String str{Ego.getHelp(prefix)};
-        write(STDOUT_FILENO, str.data(), str.size());
+        getHelp(std::cout, prefix);
     }
 
-    void Parser::getCommandHelp(Buffer& out, Command& cmd, bool isHelp)
+    void Parser::getCommandHelp(std::ostream& os, Command& cmd, bool isHelp)
     {
-        // help was requested or an error occurred
-        if (!out.empty()) {
-            out << "\n";
-        }
-
-        cmd.showHelp(mAppName, out, isHelp);
+        cmd.showHelp(mAppName, os, isHelp);
         // append global arguments
         if (cmd.mHasGlobalFlags) {
-            out << "\nGlobal Flags:\n";
+            os << "\nGlobal Flags:\n";
             for (auto& ga: cmd.mArgs) {
                 if (!ga.Global) {
                     continue;
                 }
 
                 size_t remaining{mLongestFlag - ga.Lf.size()};
-                out << "    ";
+                os << "    ";
                 if (ga.Sf != NOSF) {
-                    out << '-' << ga.Sf;
-                    if (ga.Lf)
-                        out << ", ";
+                    os << '-' << ga.Sf;
+                    if (!ga.Lf.empty())
+                        os << ", ";
                 } else {
-                    out << "    ";
+                    os << "    ";
                 }
 
-                out << "--" <<  ga.Lf;
-                out << (ga.Prompt? '?': (ga.Required? '*': ' '));
-                out << (ga.Option? (mTakesArgs? "     ": ""): " arg0");
+                os << "--" <<  ga.Lf;
+                os << (!ga.Prompt.empty()? '?': (ga.Required? '*': ' '));
+                os << (ga.Option? (mTakesArgs? "     ": ""): " arg0");
 
-                std::string str;
-                str.resize(remaining, ' ');
-                out << str << " " << ga.Help;
-                out << "\n";
+                std::fill_n(std::ostream_iterator<char>(os), remaining, ' ');
+                os << " " << ga.Help << "\n";
             }
         }
-        out << "\n";
+        os << "\n";
     }
 
     void Parser::parse(int argc, char **argv)
@@ -538,16 +512,15 @@ namespace suil::args {
             exit(EXIT_FAILURE);
         }
 
-        String  cmdstr{argv[1]};
+        std::string_view cmdstr{argv[1]};
         Command *cmd = Ego.find(cmdstr);
         if (cmd == nullptr) {
-            fprintf(stderr, "error: unknown command \"%s\" for \"%s\"\n",
-                    argv[1], mAppName());
+            fprintf(stderr, "error: unknown command \"%s\" for \"%.*s\"\n",
+                    argv[1], int(mAppName.size()), mAppName.data());
             exit(EXIT_FAILURE);
         }
 
         bool showhelp[2] ={false, true};
-        Buffer errbuf{126};
         try {
             // parse command line (appname command)
             int nargs{argc-2};
@@ -557,14 +530,12 @@ namespace suil::args {
         catch (Exception& ser) {
             showhelp[0] = true;
             showhelp[1] = false;
-            errbuf << ser.what() << "\n";
+            std::cerr << ser.what() << "\n";
         }
 
         if (showhelp[0]) {
-            //
-            Ego.getCommandHelp(errbuf, *cmd, showhelp[1]);
-            write(STDOUT_FILENO, errbuf.data(), errbuf.size());
-            exit(showhelp[1]? EXIT_SUCCESS:EXIT_FAILURE);
+            Ego.getCommandHelp((showhelp[1]? std::cout : std::cerr), *cmd, showhelp[1]);
+            exit(showhelp[1]? EXIT_SUCCESS : EXIT_FAILURE);
         }
 
         // save passed command
@@ -586,25 +557,26 @@ namespace suil::args {
                                 "invoked before invoking handle");
     }
 
-    Status<String> readParam(const String& display, const String& def)
+    Status<std::string> readParam(const std::string_view& display, const std::string& def)
     {
         write(STDIN_FILENO, display.data(), display.size());
         sync();
-        auto [err, val] = Console::in().readLine();
-        if (err == 0) {
-            return Ok(std::move(val));
+
+        std::string result;
+        if (std::getline(std::cin, result)) {
+            return Ok(std::move(result));
         }
-        else if (def) {
-            return Ok(def.dup());
+        else if (!def.empty()) {
+            return Ok(def);
         }
 
         return {-1};
     }
 
-    Status<String> readPasswd(const String& display)
+    Status<std::string> readPasswd(const std::string_view& display)
     {
-        auto pass = getpass(display());
-        return Ok(String{pass}.dup());
+        auto pass = getpass(display.data());
+        return Ok(std::string{pass});
     }
 }
 
@@ -636,9 +608,9 @@ SCENARIO("Using args::Parser")
            ({.Lf =  "four", .Help = "Fourth argument", .Required = true, .Prompt = "Enter 4:"})
            ;
 
-        suil::Buffer help{1024};
+        std::stringstream help;
         cmd.showHelp("demo", help, false);
-        suil::String expected =
+        std::string expected =
                 "Usage:\n"
                 "  demo one [flags...]\n"
                 "\n"
@@ -649,7 +621,7 @@ SCENARIO("Using args::Parser")
                 "        --three*         Third argument\n"
                 "        --four?          Fourth argument\n"
                 ;
-        REQUIRE(suil::String{help} == expected);
+        REQUIRE(help.str() == expected);
     }
 
     WHEN("Using Command::parse") {
@@ -721,8 +693,9 @@ SCENARIO("Using args::Parser")
         );
 
         {
-            auto help = parser.getHelp();
-            suil::String expected = "Test application\n"
+            std::stringstream help;
+            parser.getHelp(help);
+            std::string expected = "Test application\n"
                                     "\n"
                                     "Usage:    demo [command ...]\n"
                                     "\n"
@@ -737,14 +710,13 @@ SCENARIO("Using args::Parser")
                                     "\n"
                                     "Use \"demo\" [command] --help for more information about a command\n"
                                     "\n";
-            REQUIRE(help == expected);
+            REQUIRE(help.str() == expected);
         }
         {
             auto& cmd = parser.mCommands[2];
-            suil::Buffer out{64};
+            std::stringstream out;
             parser.getCommandHelp(out, cmd, false);
-            suil::String help{out};
-            suil::String expected = "Usage:\n"
+            std::string expected =  "Usage:\n"
                                     "  demo add [flags...]\n"
                                     "\n"
                                     "Flags:\n"
@@ -755,7 +727,7 @@ SCENARIO("Using args::Parser")
                                     "    -h, --help     Show help for the active command for application\n"
                                     "    -v, --verbose  Show verbose output\n"
                                     "\n";
-            REQUIRE(help == expected);
+            REQUIRE(out.str() == expected);
         }
     }
 

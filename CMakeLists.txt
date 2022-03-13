@@ -24,7 +24,7 @@ option(ENABLE_UNIT_TESTS    "Enable building of unit tests" ON)
 option(ENABLE_EXAMPLES      "Enable building examples included in the project" ON)
 option(DEVEL_IDE            "When enabled, it will suppress some cmake errors" OFF)
 
-set(SUIL_ENABLE_BACKTRACE  1 CACHE STRING "Enable/Disable backtrace in builds")
+set(SUIL_ENABLE_BACKTRACE  0 CACHE STRING "Enable/Disable backtrace in builds")
 set(SUIL_ENABLE_TRACE  1 CACHE STRING "Enable trace logs in debug builds (Debug only option)")
 set(SUIL_ASYNC_TRACE  ${SUIL_ENABLE_TRACE} CACHE STRING "Enable tracing coroutine scheduler on console")
 set(SUIL_BUILD_NUMBER  0 CACHE STRING "Build number version")

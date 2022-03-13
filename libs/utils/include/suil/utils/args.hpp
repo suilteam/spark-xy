@@ -12,15 +12,15 @@ namespace suil::args {
     constexpr const char NOSF{'\0'};
 
     struct Arg {
-        std::string_view Lf{};
-        std::string_view Help{};
+        std::string      Lf{};
+        std::string      Help{};
         char             Sf{NOSF};
         bool             Option{true};
         bool             Required{false};
         bool             Global{false};
-        std::string_view Prompt{};
+        std::string      Prompt{};
         bool             Hidden{false};
-        std::string_view Default{};
+        std::string      Default{};
 
     private:
         friend struct Command;
@@ -84,32 +84,32 @@ namespace suil::args {
     struct Command {
         using Handler = std::function<void(Command&)>;
 
-        Command(std::string name, std::string desc = nullptr, bool help = false);
+        Command(std::string name, std::string desc = {}, bool help = false);
 
         Command& operator()(Arg&& arg);
         Command& operator()(Handler handler);
         Command  operator()() { return std::move(Ego); }
-        void showHelp(std::string_view app, std::stringstream& help, bool isHelp = false) const;
+        void showHelp(const std::string_view& app, std::ostream& os, bool isHelp = false) const;
         bool parse(int argc, char *argv[], bool debug = false);
         bool parse(Arguments& arguments, bool debug = false) {
             return parse(arguments.Argc, arguments.Argv, debug);
         }
 
-        std::string at(int index, std::string_view errMsg = {});
+        std::string_view at(int index, const std::string_view& errMsg = {});
 
-        std::string operator[](char sf) {
-            auto& arg = Ego.check(nullptr, sf);
+        std::string_view operator[](char sf) {
+            auto& arg = Ego.check({}, sf);
             return Ego[arg.Lf];
         }
 
-        std::string operator[](std::string_view lf);
+        std::string_view operator[](const std::string_view& lf);
 
-        std::string operator[](int index) {
+        std::string_view operator[](int index) {
             return Ego.at(index);
         }
 
         template <typename V>
-        V at(int index, std::string_view errMsg) {
+        V at(int index, const std::string_view& errMsg = {}) {
             auto value = Ego.at(index, errMsg);
             V tmp{};
             setValue(tmp, value);
@@ -127,7 +127,7 @@ namespace suil::args {
             auto zStr = Ego[lf];
             if constexpr(std::is_same_v<V, std::string>) {
                 if (!zStr.empty()) {
-                    return std::move(zStr);
+                    return zStr;
                 }
                 else {
                     return std::move(def);
@@ -144,18 +144,19 @@ namespace suil::args {
 
     private suil_ut:
         friend class Parser;
-        inline void setValue(std::string& out, std::string& from) {
-            out = std::move(from);
+
+        inline void setValue(std::string& out, const std::string_view& from) {
+            out = std::string{from};
         }
 
         template <typename V>
-        inline void setValue(V& out, const std::string &from) {
+        inline void setValue(V& out, const std::string_view& from) {
             suil::cast(suil::trim(from), out);
         }
 
         template <typename V>
         inline void setValue(std::vector<V>& out, const std::string_view& from) {
-            auto parts = std::split(",");
+            auto parts = suil::parts(out, ",");
             for (auto& part: parts) {
                 V val{};
                 setValue(val, part);
@@ -164,15 +165,15 @@ namespace suil::args {
         }
 
         void requestValue(Arg& arg);
-        Arg& check(const String& lf, char sf);
-        bool check(Arg*& found, const String& lf, char sf);
+        Arg& check(const std::string_view& lf, char sf);
+        bool check(Arg*& found, const std::string_view& lf, char sf);
 
-        static int isValid(const String&  flag);
+        static int isValid(const std::string_view&  flag);
 
-        String mName{};
-        String mDesc{};
+        std::string mName{};
+        std::string mDesc{};
         std::vector<Arg> mArgs{};
-        std::vector<String> mPositionals{};
+        std::vector<std::string> mPositionals{};
         size_t mLongest{0};
         bool mRequired{false};
         bool mInternal{false};
@@ -180,12 +181,12 @@ namespace suil::args {
         bool mHasGlobalFlags{false};
         bool mTakesArgs{false};
         Handler mHandler{nullptr};
-        UnorderedMap<String, CaseInsensitive> mParsed{};
+        std::unordered_map<std::string_view, std::string, std::hash<std::string_view>, std_string_case_eq> mParsed{};
     };
 
     class Parser {
     public:
-        Parser(String app, String version, String descript = nullptr);
+        Parser(std::string app, std::string version, std::string descript = nullptr);
         template <typename... T>
         Parser& operator()(T... obj) {
             Ego.add(std::forward<T>(obj)...);
@@ -195,22 +196,22 @@ namespace suil::args {
         void  parse(int argc, char *argv[]);
         void  parse(Arguments& arguments) { parse(arguments.Argc, arguments.Argv); }
         void  handle();
-        void  getCommandHelp(Buffer& out, Command& cmd, bool isHelp);
+        void  getCommandHelp(std::ostream& os, Command& cmd, bool isHelp);
         const Command* getCommand() const {
             return mParsed;
         }
 
         template <typename T>
-        String operator[](char sf) {
-            String _{nullptr};
+        std::string operator[](char sf) {
+            std::string _{nullptr};
             Arg *arg = findArg(_, sf);
             if (arg) {
                 return Ego.getValue(arg->Lf, arg);
             }
-            return String{};
+            return {};
         }
 
-        String operator[](const String& lf)
+        std::string operator[](const std::string_view& lf)
         {
             return getValue(lf, nullptr);
         }
@@ -244,25 +245,24 @@ namespace suil::args {
             return Ego;
         }
 
-        String    getValue(const String&, Arg* arg);
-        void      showHelp(const char *prefix = nullptr);
-        String    getHelp(const char *prefix = nullptr);
-        Command*  find(const String& name);
-        Arg* findArg(const String& name, char sf=NOSF);
-        Arg  shallowCopy(const Arg& arg);
+        std::string     getValue(const std::string_view&, Arg* arg);
+        void            showHelp(const char *prefix = nullptr);
+        void            getHelp(std::ostream& os, const char *prefix = nullptr);
+        Command*        find(const std::string_view& name);
+        Arg* findArg(const std::string_view& name, char sf=NOSF);
         std::vector<Command>  mCommands;
         std::vector<Arg> mGlobals;
         // this is the command that successfully passed
         Command   *mParsed{nullptr};
-        String    mAppName;
-        String    mDescription;
-        String    mAppVersion;
+        std::string    mAppName;
+        std::string    mDescription;
+        std::string    mAppVersion;
         size_t    mLongestCmd{0};
         size_t    mLongestFlag{0};
         bool      mTakesArgs{false};
         bool      mInter{false};
     };
 
-    Status<String> readParam(const String& display, const String& def);
-    Status<String> readPasswd(const String& display);
+    Status<std::string> readParam(const std::string_view& display, const std::string& def);
+    Status<std::string> readPasswd(const std::string_view& display);
 }

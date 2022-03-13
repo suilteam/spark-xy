@@ -18,6 +18,8 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <span>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <thread>
@@ -39,24 +41,30 @@
  * Symbol variable with name v
  * @param v the name of the symbol
  */
-#define var(v) s::_##v
+#define var(NAME) s::NAME
 
 /**
  * Access a symbol, \see sym
  */
-#define sym(v) var(v)
+#define sym(NAME) var(NAME)
 
 /**
  * Access symbol type
  */
-#define Sym(v) s::_##v##_t
+#define Sym(NAME) s::NAME##_t
+
+/**
+ * Define a symbol variable
+ */
+
+#define Var(NAME, TYPE) s::NAME##_t::variable_t<TYPE>
 
 /**
  * Set an option, assign value \param v to variable \param o
  * @param o the variable to assign value to
  * @param v the value to assign to the variable
  */
-#define opt(o, v) var(o) = v
+#define opt(o, v) li::make_variable(var(o), v)
 
 /**
  * Create a symbol property
@@ -277,6 +285,25 @@ namespace suil {
      */
     char i2c(uint8_t c, bool caps = false);
 
+    /**
+     * @brief Converts the given hex string to its binary representation
+     *
+     * @param str the hex string to load into a byte buffer
+     * @param out the byte buffer to load string into
+     * @param olen the size of the output buffer (MUST be at least str.size()/2)
+     */
+    void bytes(const std::string_view&str, uint8_t *out, size_t olen);
+
+    /**
+     * @brief Converts the given hex string to its binary representation
+     *
+     * @param str the hex string to load into a byte buffer
+     * @param buf the byte buffer to hold the binary bytes
+     */
+    inline void bytes(const std::string_view &str, std::span<uint8> buf) {
+        bytes(str, buf.data(), buf.size());
+    }
+
     namespace internal {
 
         /**
@@ -427,56 +454,93 @@ namespace suil {
         memcpy(buf, &v, sizeof(T));
     }
 
-    template <typename T>
-    class _ConstVec {
-    public:
-        _ConstVec(std::vector<T> vec)
-                : vec{std::move(vec)}
-        {}
-
-        _ConstVec() = default;
-
-        DISABLE_COPY(_ConstVec);
-        MOVE_CTOR(_ConstVec) noexcept = default;
-        MOVE_ASSIGN(_ConstVec) noexcept = default;
-
-        const T& operator[](int index) const { return vec[index]; }
-        const T& back() const { return vec.back(); }
-        const T& front() const { return vec.front(); }
-        auto cbegin() const { return vec.cbegin(); }
-        auto cend() const { return vec.cend(); }
-        auto begin() const { return vec.cbegin(); }
-        auto end() const { return vec.cend(); }
-        auto size() const { return vec.size(); };
-        auto empty() const { return vec.empty(); }
-
-        using const_iterator = typename std::vector<T>::const_iterator;
-        using value_type = typename std::vector<T>::value_type;
-    private:
-        std::vector<T> vec{};
-    };
-
-    template <typename T>
-    using ConstVec = const _ConstVec<T>;
-
+    /**
+     * @brief A status is a lightweight struct that can be used as a return
+     * type for API's that return error code in with their return type
+     *
+     * @tparam T The type of the value returned by a function
+     * @tparam E The type of error code, can be an integer or an enum
+     * @tparam e the value indicating success on the error code
+     */
     template <typename T, typename E = int, E e = 0>
     requires (std::is_default_constructible_v<T> &&
               std::is_default_constructible_v<E> &&
               (std::is_enum_v<E> || std::is_integral_v<E>))
     struct Status {
+        Status() = default;
+        Status(T res) : result{std::move(res)} {}
+        Status(E err) : error{std::move(err)} {}
+        operator bool() const { return error == e; }
+        T result{};
         E error{e};
-        T result;
     };
 
+    /**
+     * @brief A wrapper function around creating a truth status code
+     *
+     * @tparam T the type of the result held in a status object
+     * @tparam E the type of the error codes on the status object
+     * @tparam ok the value of the error code corresponding to success status
+     * @param t the value to return with status code
+     *
+     * @return an instance of the status code of type \tparam T
+     */
     template <typename T, typename E = int, E ok = 0>
-    Status<T, E> Ok(T t) { return { ok, std::move(t) }; }
+    Status<T, E> Ok(T t) { return { std::move(t) }; }
 
+    /**
+     * @brief A function to return the hash of the currently executing
+     * thread's ID
+     *
+     * @return the hash of the current thread's ID
+     */
     inline std::size_t tid() noexcept { return std::hash<std::thread::id>{}(std::this_thread::get_id()); }
-    uint16_t  mtid() noexcept;
+
+    /**
+     * @brief Compares \param orig string against the other string \param o
+     *
+     * @param orig the original string to match
+     * @param o the string to compare to
+     *
+     * @return true if the given strings are equal
+     */
+    inline bool strmatchany(const char *orig, const char *o) {
+        return strcmp(orig, o) == 0;
+    }
+
+    /**
+     * @brief Match any of the given strings to the given string \param l
+     *
+     * @tparam A always const char*
+     * @param l the string to match others against
+     * @param r the first string to match against
+     * @param args comma separated list of other string to match
+     * @return true if any ot the given string is equal to \param l
+     */
+    template<typename... A>
+    inline bool strmatchany(const char *l, const char *r, A... args) {
+        return strmatchany(l, r) || strmatchany(l, std::forward<A>(args)...);
+    }
+
+    /**
+     * @brief Compare the first value \p l against all the other values (smilar to ||)
+     *
+     * @tparam T the type of the values
+     * @tparam A type of other values to match against
+     * @param l the value to match against
+     * @param args comma separated list of values to match
+     * @return true if any
+     */
+    template<typename T, typename... A>
+    inline bool matchany(const T l, A... args) {
+        static_assert(sizeof...(args), "at least 1 argument is required");
+        return ((args == l) || ...);
+    }
 
     /**
      * @brief Converts a string to a decimal number. Floating point
      * numbers are not supported
+     *
      * @param str the string to convert to a number
      * @param base the numbering base to the string is in
      * @param min expected minimum value
@@ -486,7 +550,8 @@ namespace suil {
     int64_t strtonum(const std::string_view& str, int base, long long int min, long long int max);
 
     /**
-    * converts the given string to a number
+     * @brief Converts the given string to a number
+     *
     * @tparam T the type of number to convert to
     * @param str the string to convert to a number
     * @return the converted number
@@ -499,7 +564,8 @@ namespace suil {
     }
 
     /**
-     * converts the given string to a number
+     * @brief converts the given string to a number
+     *
      * @tparam T the type of number to convert to
      * @param str the string to convert to a number
      * @return the converted number
@@ -518,7 +584,8 @@ namespace suil {
     }
 
     /**
-     * convert given number to string
+     * @brief convert given number to string a string
+     *
      * @tparam T the type of number to convert
      * @param v the number to convert
      * @return converts the number to string using std::to_string
@@ -529,7 +596,8 @@ namespace suil {
     }
 
     /**
-     * converts given string to string
+     * @brief converts given string to string
+     *
      * @param str
      * @return a peek of the given string
      */
@@ -538,7 +606,8 @@ namespace suil {
     }
 
     /**
-     * converts the given c-style string to a \class String
+     * @brief Converts the given c-style string to a \class std::string
+     *
      * @param str the c-style string to convert
      * @return a \class String which is a duplicate of the
      * given c-style string
@@ -548,7 +617,8 @@ namespace suil {
     }
 
     /**
-     * cast \class String to number of given type
+     * @brief Cast \class std::string_view to number of given type
+     *
      * @tparam T the type of number to cast to
      * @param data the string to cast
      * @param to the reference that will hold the result
@@ -559,7 +629,8 @@ namespace suil {
     }
 
     /**
-     * cast the given \class String to a boolean
+     * @brief Cast the given \class std::string_view to a boolean
+     *
      * @param data the string to cast
      * @param to reference to hold the result. Will be true if the string is
      * 'true' or '1'
@@ -570,12 +641,80 @@ namespace suil {
     }
 
     /**
-     * @brief
-     * @param data the string to cast
-     * @param to reference to hold the result. Will be true if the string is
-     * 'true' or '1'
+     * @brief Trims the given \class std::string_view, removing whitespaces at both ends.
+     *
+     * @note the returned string is string view referencing the part of the
+     * input string view
+     *
+     * @param str the string to trim
+     * @param what a list of characters given as a string to trim
+     *
+     * @return the trimmed string view
      */
-    std::string_view trim(const std::string_view& data);
+    std::string_view trim(const std::string_view& str, const char *what = " ");
+
+    /**
+     * @brief Removes the given \param c from the string \param str
+     * returning a new copy
+     *
+     * @param str the string to strip
+     * @param what a list characters to strip out of the string
+     *
+     * @return a string with the specified character removed
+     */
+    std::string strip(const std::string_view& str, const char* what = " ");
+
+    /**
+     * @brief Splits a given string at every occurrence of the given
+     * characters
+     *
+     * @param str the string to split
+     * @param delim the delimiter to use when splitting the string
+     *
+     * @return A vector containing the split string parts. The parts are
+     * copied from the original string
+     */
+    std::vector<std::string> split(const std::string_view& str, const char *delim = " ");
+
+    /**
+     * Splits the given \param str using the given \param delim and returns
+     * parts as views into the string.
+     *
+     * @note the parts returned must be used before \param str goes out of scope in
+     * the calling context
+     *
+     * @param str the string to split
+     * @param delim the delimiter to use when splitting the string
+     *
+     * @return parts of the split string (just views into the original string)
+     */
+    std::vector<std::string_view> parts(const std::string_view& str, const char *delim = " ");
+
+    /**
+     * @brief \class std::string \class std::string_view case sensitive comparator
+     */
+    struct std_string_eq {
+        inline bool operator()(const std::string& l, const std::string& r) const
+        {
+            return std::equal(l.begin(), l.end(), r.begin(), r.end());
+        }
+    };
+
+    /**
+     * @brief \class std::string \class std::string_view case insensitive comparator
+     */
+    struct std_string_case_eq {
+        bool operator()(const std::string& s1, const std::string& s2) const {
+            return operator()(std::string_view{s1}, std::string_view{s2});
+        }
+
+        bool operator()(const std::string_view& s1, const std::string_view& s2) const {
+            return ((s1.size() == s2.size()) &&
+                    (strncasecmp(s1.data(), s2.data(), s1.size()) == 0));
+        }
+    };
+
+
 }
 
 /**
@@ -583,19 +722,19 @@ namespace suil {
 * The scoped resource must have a method close() which will be invoked at the end
 * of the scope
 */
-#define scoped(n, x) auto& ##n = x ; suil::internal::scoped_res<decltype( n )> _##n { n }
+#define scoped(N, X) auto& N = X ; suil::internal::scoped_res<decltype( N )> _SUIL_SCOPE_##N { N }
 
-#define scope(x) suil::internal::scoped_res<decltype( x )> SUIL_XPASTE(_scope, __LINE__) { x }
+#define scope(X) suil::internal::scoped_res<decltype( X )> SUIL_XPASTE(_SUIL_SCOPE, __LINE__) { X }
 
 /**
  * Defers execution of the given code block to the end of the block in which it is defined
  * @param N the name of the defer block
  * @param F the code block to execute at the end of the block
  */
-#define vdefer(N, F) suil::internal::_defer _##N {[&]() F }
+#define vdefer(N, F) suil::internal::_defer _SUIL_DEFER_##N {[&]() F }
 
 /**
  * Defers execution of the given code block to the end of the block in which it is defined
  * @param F the code block to execute at the end of the block
  */
-#define defer(F) suil::internal::_defer SUIL_XPASTE(_def, __LINE__) {[&]() F }
+#define defer(F) suil::internal::_defer SUIL_XPASTE(_SUIL_DEFER, __LINE__) {[&]() F }
