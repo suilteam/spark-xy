@@ -31,7 +31,7 @@ namespace suil::args {
 
         inline bool check(char c) const { return c == Sf; }
 
-        inline bool check(char c, const std::string_view& l) {
+        inline bool check(char c, const std::string_view& l) const {
             return (c != NOSF && check(c)) || check(l);
         }
     };
@@ -95,21 +95,21 @@ namespace suil::args {
             return parse(arguments.Argc, arguments.Argv, debug);
         }
 
-        std::string_view at(int index, const std::string_view& errMsg = {});
+        std::string_view at(int index, const std::string_view& errMsg = {}) const;
 
-        std::string_view operator[](char sf) {
+        std::string_view operator[](char sf) const {
             auto& arg = Ego.check({}, sf);
             return Ego[arg.Lf];
         }
 
-        std::string_view operator[](const std::string_view& lf);
+        std::string_view operator[](const std::string_view& lf) const;
 
-        std::string_view operator[](int index) {
+        std::string_view operator[](int index) const {
             return Ego.at(index);
         }
 
         template <typename V>
-        V at(int index, const std::string_view& errMsg = {}) {
+        V at(int index, const std::string_view& errMsg = {}) const {
             auto value = Ego.at(index, errMsg);
             V tmp{};
             setValue(tmp, value);
@@ -117,10 +117,10 @@ namespace suil::args {
         }
 
         template <typename V>
-        V value(std::string_view lf, V def)
+        V value(std::string_view lf, V def) const
         {
-            Arg* _;
-            if (!check(_, lf, NOSF)) {
+            const Arg* _;
+            if (!check(&_, lf, NOSF)) {
                 throw InvalidArguments("passed parameter '", lf, "' is not an argument");
             }
 
@@ -138,25 +138,25 @@ namespace suil::args {
                 if (!zStr.empty()) {
                     setValue(tmp, zStr);
                 }
-                return std::move(tmp);
+                return tmp;
             }
         }
 
     private suil_ut:
         friend class Parser;
 
-        inline void setValue(std::string& out, const std::string_view& from) {
-            out = std::string{from};
+        inline void setValue(std::string_view& out, const std::string_view& from) const {
+            out = from;
         }
 
         template <typename V>
-        inline void setValue(V& out, const std::string_view& from) {
+        inline void setValue(V& out, const std::string_view& from) const {
             suil::cast(suil::trim(from), out);
         }
 
         template <typename V>
-        inline void setValue(std::vector<V>& out, const std::string_view& from) {
-            auto parts = suil::parts(out, ",");
+        inline void setValue(std::vector<V>& out, const std::string_view& from) const {
+            auto parts = suil::parts(from, ",");
             for (auto& part: parts) {
                 V val{};
                 setValue(val, part);
@@ -165,8 +165,8 @@ namespace suil::args {
         }
 
         void requestValue(Arg& arg);
-        Arg& check(const std::string_view& lf, char sf);
-        bool check(Arg*& found, const std::string_view& lf, char sf);
+        const Arg& check(const std::string_view& lf, char sf) const;
+        bool check(const Arg** found, const std::string_view& lf, char sf) const;
 
         static int isValid(const std::string_view&  flag);
 

@@ -27,7 +27,7 @@ SuilAddBinary(Meta
         SOURCES  ${SUIL_META_SOURCES}
         OPTIONS  PRIVATE -Wall -Wextra -pedantic -Werror -fno-rtti -g -O3
         RENAME   suil-meta
-        LIBS     cppast Suil::Utils)
+        LIBS     cppast Suil::Utils dl)
 
 if (ENABLE_UNIT_TESTS)
     include_directories(test)

@@ -21,7 +21,7 @@
 #include <dlfcn.h>    // for dladdr
 #include <cxxabi.h>   // for __cxa_demangle
 
-namespace {
+namespace suil {
 
     void backtrace(char *buf, size_t size) {
         void *callstack[128];

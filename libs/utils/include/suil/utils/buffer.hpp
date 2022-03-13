@@ -21,7 +21,7 @@ namespace suil {
         explicit StringBuffer(size_t size);
 
         std::string str() { return std::exchange(_buffer, {}); }
-        std::string_view view() const { return _buffer; }
+        [[nodiscard]] std::string_view view() const { return _buffer; }
 
         MOVE_CTOR(StringBuffer) = default;
         MOVE_ASSIGN(StringBuffer) =  default;
