@@ -10,20 +10,18 @@
 
 #include "suil/utils/b64.hpp"
 #include "suil/utils/exception.hpp"
-#include "suil/utils/mbuffer.hpp"
+#include "suil/utils/buffer.hpp"
 
 namespace suil::B64 {
 
     std::string encode(const uint8_t *data, size_t sz) {
-        MemoryBuffer ms{(2+((sz+2)/3*4))};
-        std::ostream os{&ms};
-        encode(os, data, sz);
-        return ms.str();
+        StringBuffer mb{};
+        encode(mb(), data, sz);
+        return mb.str();
     }
 
     void encode(std::ostream& os, const uint8_t *data, size_t sz) {
         static const char b64table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        // ob.reserve(2+((sz+2)/3*4));
 
         while (sz >= 3) {
             // |X|X|X|X|X|X|-|-|
@@ -66,9 +64,8 @@ namespace suil::B64 {
     }
 
     std::string decode(const uint8_t *in, size_t size) {
-        MemoryBuffer mb{(uint32_t) (size/4)*3};
-        std::ostream os{&mb};
-        decode(os, in, size);
+        StringBuffer mb{(uint32_t) (size / 4) * 3};
+        decode(mb(), in, size);
         return mb.str();
     }
 
@@ -175,7 +172,7 @@ TEST_CASE("B64 encoding", "[common][utils][base64]")
     SECTION("data with spaces") {
         raw = "Sentence with spaces";  // U2VudGVuY2Ugd2l0aCBzcGFjZXM=
         b64 = B64::encode(raw);
-        CHECK(b64.compare("U2VudGVuY2Ugd2l0aCBzcGFjZXM=") == 0);
+        CHECK(b64 == "U2VudGVuY2Ugd2l0aCBzcGFjZXM=");
         REQUIRE(raw == B64::decode(b64));
     }
 

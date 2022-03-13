@@ -9,11 +9,11 @@
  */
 
 #include "suil/utils/url.hpp"
-#include "suil/utils/mbuffer.hpp"
+#include "suil/utils/buffer.hpp"
 
 namespace {
 
-    void URLDecode(const char *src, const int src_len, std::ostream& os)
+    void URLDecode(const char *src, size_t len, std::ostream& os)
     {
 #define IS_HEX_CHAR(ch) \
         (((ch) >= '0' && (ch) <= '9') || \
@@ -43,7 +43,7 @@ namespace {
         int v_low;
 
         start = (unsigned char *)src;
-        end = (unsigned char *)src + src_len;
+        end = (unsigned char *)src + len;
         while (start < end)
         {
             if (*start == '%' && start + 2 < end)
@@ -60,7 +60,7 @@ namespace {
                 }
                 else
                 {
-                    os.put(*start);
+                    os.put(char(*start));
                     start++;
                 }
             }
@@ -71,7 +71,7 @@ namespace {
             }
             else
             {
-                os.put(*start);
+                os.put(char(*start));
                 start++;
             }
         }
@@ -85,17 +85,17 @@ namespace suil::URL {
 
     std::string encode(const void* data, size_t len)
     {
-        MemoryBuffer mb{(len*3)};
-        std::ostream os{&mb};
+        StringBuffer mb{(len*3)};
+        auto& os = mb();
         const char *src = static_cast<const char *>(data), *end = src + len;
-        uint8_t c;
+        char c;
         while (src != end) {
-            c = (uint8_t) *src++;
+            c = *src++;
             if (!isalnum(c) && strchr("-_.~", c) == nullptr) {
-                static const uint8_t HexChars[] = "0123456789ABCDEF";
-                os.put('%');
-                os.put(HexChars[(c&0xF0)>>4]);
-                os.put(HexChars[(c&0x0F)]);
+                static const char HexChars[] = "0123456789ABCDEF";
+                os.put('%')
+                  .put(HexChars[(c&0xF0)>>4])
+                  .put(HexChars[(c&0x0F)]);
             }
             else {
                 os.put(c);
@@ -107,11 +107,9 @@ namespace suil::URL {
 
     std::string decode(const void* data, size_t len)
     {
-        MemoryBuffer mb{len};
-        std::ostream os{&mb};
-        size_t size{len};
+        StringBuffer mb{len};
 
-        URLDecode(static_cast<const char*>(data), (int)len, os);
+        URLDecode(static_cast<const char*>(data), int(len), mb());
 
         return mb.str();
     }

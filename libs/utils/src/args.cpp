@@ -3,6 +3,7 @@
 //
 
 #include "suil/utils/args.hpp"
+#include "suil/utils/buffer.hpp"
 #include "suil/utils/exception.hpp"
 
 #include <iostream>
@@ -210,7 +211,7 @@ namespace suil::args {
         }
 
         if (!isHelp) {
-            std::stringstream ss;
+            StringBuffer ss;
             ss << "error: missing required arguments:";
             bool missing{false};
             for (auto& arg: mArgs) {
@@ -608,8 +609,8 @@ SCENARIO("Using args::Parser")
            ({.Lf =  "four", .Help = "Fourth argument", .Required = true, .Prompt = "Enter 4:"})
            ;
 
-        std::stringstream help;
-        cmd.showHelp("demo", help, false);
+        suil::StringBuffer help;
+        cmd.showHelp("demo", help(), false);
         std::string expected =
                 "Usage:\n"
                 "  demo one [flags...]\n"
@@ -693,8 +694,8 @@ SCENARIO("Using args::Parser")
         );
 
         {
-            std::stringstream help;
-            parser.getHelp(help);
+            suil::StringBuffer help;
+            parser.getHelp(help());
             std::string expected = "Test application\n"
                                     "\n"
                                     "Usage:    demo [command ...]\n"
@@ -714,8 +715,8 @@ SCENARIO("Using args::Parser")
         }
         {
             auto& cmd = parser.mCommands[2];
-            std::stringstream out;
-            parser.getCommandHelp(out, cmd, false);
+            suil::StringBuffer out;
+            parser.getCommandHelp(out(), cmd, false);
             std::string expected =  "Usage:\n"
                                     "  demo add [flags...]\n"
                                     "\n"

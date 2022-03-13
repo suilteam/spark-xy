@@ -21,10 +21,10 @@ set(SUIL_UTILS_SOURCES
         ${SUIL_PLATFORM_SOURCES}
         src/args.cpp
         src/b64.cpp
+        src/buffer.cpp
         src/console.cpp
         src/datetime.cpp
         src/exception.cpp
-        src/mbuffer.cpp
         src/logging.cpp
         src/url.cpp
         src/utils.cpp

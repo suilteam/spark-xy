@@ -15,18 +15,31 @@
 
 namespace suil {
 
-    class MemoryBuffer : public std::streambuf {
+    class StringBuffer : public std::streambuf {
     public:
-        MemoryBuffer() = default;
-        explicit MemoryBuffer(size_t size);
+        StringBuffer() = default;
+        explicit StringBuffer(size_t size);
 
         std::string str() { return std::exchange(_buffer, {}); }
         std::string_view view() const { return _buffer; }
 
-        MOVE_CTOR(MemoryBuffer) = default;
-        MOVE_ASSIGN(MemoryBuffer) =  default;
+        MOVE_CTOR(StringBuffer) = default;
+        MOVE_ASSIGN(StringBuffer) =  default;
 
-        DISABLE_COPY(MemoryBuffer);
+        DISABLE_COPY(StringBuffer);
+
+        /**
+         * @warning Do not use this operator unless you know what you are doing. It
+         * returns a per thread stream. It is VERY unsafe since it overrides the internal
+         * buffer of the stream.
+         */
+        std::ostream& operator()();
+
+        template <typename T>
+        StringBuffer& operator<<(const T& value) {
+            Ego() << value;
+            return Ego;
+        }
 
     protected:
         std::streamsize xsputn(const char_type *__s, std::streamsize __n) override;

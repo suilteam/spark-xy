@@ -11,6 +11,7 @@
 #pragma once
 
 #include <suil/utils/utils.hpp>
+#include <suil/utils/buffer.hpp>
 
 #include <exception>
 #include <string>
@@ -114,9 +115,9 @@ namespace suil {
         template <typename... Args>
         void makeMessage(Args... args) {
             if (sizeof...(args)) {
-                std::stringstream ss;
-                (ss << ... << args);
-                mMessage = ss.str();
+                StringBuffer sb{32};
+                (sb << ... << args);
+                mMessage = sb.str();
             }
         }
 
