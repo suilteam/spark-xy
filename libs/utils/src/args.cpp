@@ -85,14 +85,14 @@ namespace suil::args {
         }
     }
 
-    Arg& Command::check(const std::string_view& lf, char sf)
+   const Arg& Command::check(const std::string_view& lf, char sf) const
     {
-        Arg *arg{nullptr};
-        if (check(arg, lf, sf)) {
+        const Arg *arg{nullptr};
+        if (check(&arg, lf, sf)) {
             return *arg;
         }
         else {
-            if (lf.empty()) {
+            if (!lf.empty()) {
                 throw InvalidArguments("error: command argument '--", lf, "' is not recognized");
             }
             else {
@@ -101,11 +101,11 @@ namespace suil::args {
         }
     }
 
-    bool Command::check(Arg*& found, const std::string_view& lf, char sf)
+    bool Command::check(const Arg** found, const std::string_view& lf, char sf) const
     {
         for (auto& arg: mArgs) {
             if (arg.check(sf, lf)) {
-                found = &arg;
+                *found = &arg;
                 return true;
             }
         }
@@ -258,7 +258,7 @@ namespace suil::args {
         mParsed.emplace(arg.Lf, std::move(status.result));
     }
 
-    std::string_view Command::at(int index, const std::string_view& errMsg)
+    std::string_view Command::at(int index, const std::string_view& errMsg) const
     {
         if (mPositionals.size() <= index) {
             if (!errMsg.empty()) {
@@ -269,7 +269,7 @@ namespace suil::args {
         return mPositionals[index];
     }
 
-    std::string_view Command::operator[](const std::string_view& lf)
+    std::string_view Command::operator[](const std::string_view& lf) const
     {
         auto it = mParsed.find(lf);
         if (it != mParsed.end()) {
@@ -368,8 +368,8 @@ namespace suil::args {
         if (Ego.find(cmd.mName) == nullptr) {
             // add copies of global arguments
             for (auto& ga: mGlobals) {
-                Arg* _;
-                if (!cmd.check(_, ga.Lf, ga.Sf)) {
+                const Arg* _;
+                if (!cmd.check(&_, ga.Lf, ga.Sf)) {
                     cmd.mHasGlobalFlags = true;
                     cmd.mArgs.push_back(ga);
                 }

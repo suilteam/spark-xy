@@ -97,29 +97,13 @@ find_package(Secp256k1 REQUIRED)
 
 include(FetchContent)
 
-# Fetch Iod project
-FetchContent_Declare(
-        iod
-        GIT_REPOSITORY https://gitlab.com/sw-devel/thirdparty/iod.git)
-
-# Fetch Scc project
-FetchContent_Declare(
-    scc
-    GIT_REPOSITORY https://github.com/dccarter/scc.git
-    GIT_TAG v0.1.0)
 
 FetchContent_Declare(
         cppast
         GIT_REPOSITORY https://github.com/foonathan/cppast.git
         GIT_TAG v0.1.0)
 
-FetchContent_MakeAvailable(iod scc cppast)
-set(CMAKE_MODULE_PATH
-        ${CMAKE_MODULE_PATH}
-        ${scc_SOURCE_DIR}/cmake)
-
-set(SUIL_SCC_DEFAULT_BINARY ${scc_BINARY_DIR}/scc)
-include(SuilScc)
+FetchContent_MakeAvailable(cppast)
 
 if (ENABLE_UNIT_TESTS)
     include(Catch.cmake)

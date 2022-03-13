@@ -9,30 +9,44 @@
  */
 
 #include <cppast/libclang_parser.hpp>
+
+#include <suil/utils/args.hpp>
+#include <suil/utils/exception.hpp>
+#include <suil/utils/logging.hpp>
+
 #include <iostream>
+
+using namespace suil::args;
+using namespace std::string_view_literals;
+
+using suil::Exception;
+
+static void build(const Command& cmd);
 
 int main(int argc, char *argv[])
 {
-    cppast::libclang_compilation_database database(argv[1]); // the compilation database
-
-    // simple_file_parser allows parsing multiple files and stores the results for us
-    cppast::simple_file_parser<cppast::libclang_parser> parser(type_safe::ref(index));
-    try
-    {
-        cppast::parse_database(parser, database); // parse all files in the database
+    suil::args::Parser parser("suil-meta", "1.0", "Parses C++ header files and generates static meta types");
+    try {
+        parser(
+                Command("build", "Processes the given C++ header files and generates meta types")
+                        ({"out-dir", "The directory to generate the sources into", 'D', false})
+                        ({"dot-fix", "The postfix string to add to the generated files", 'P', false})
+                        (build)
+                        ()
+        );
+        parser.parse(argc, argv);
+        parser.handle();
     }
-    catch (cppast::libclang_error& ex)
-    {
-        std::cerr << "fatal libClang error: " << ex.what() << '\n';
+    catch (...) {
+        auto ex = Exception::fromCurrent();
+        serror("unhandled error: %s", ex.what());
         return EXIT_FAILURE;
     }
+}
 
-    if (parser.error())
-        // a non-fatal parse error
-        // error has been logged to stderr
-        return 1;
+void build(const Command& cmd)
+{
+    auto outputDir = cmd.value("out-dir", ""sv);
+    auto fnameDotFix = cmd.value("dot-fix", ""sv);
 
-    for (auto& file : parser.files())
-        cb(file);
-    return 0;
 }

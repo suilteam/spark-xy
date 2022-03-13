@@ -88,7 +88,7 @@ namespace suil {
 
     class LogWriter {
     public:
-        sptr(LogWriter);
+        sptr(LogWriter)
 
         virtual void write(const char *log,
                            size_t size,
@@ -246,7 +246,7 @@ namespace suil {
 
     class Syslog : public LogWriter {
     public:
-        sptr(Syslog);
+        sptr(Syslog)
         Syslog(const char *name = "suil");
 
         void write(const char *msg, size_t sz, Level lvl, const char *tag) override;
