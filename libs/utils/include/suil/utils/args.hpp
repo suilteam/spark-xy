@@ -124,19 +124,20 @@ namespace suil::args {
                 throw InvalidArguments("passed parameter '", lf, "' is not an argument");
             }
 
-            auto zStr = Ego[lf];
-            if constexpr(std::is_same_v<V, std::string>) {
-                if (!zStr.empty()) {
-                    return zStr;
+            auto it = mParsed.find(lf);
+            auto found = (it != mParsed.end());
+            if constexpr(std::is_same_v<V, std::string_view>) {
+                if (found) {
+                    return it->second;
                 }
                 else {
-                    return std::move(def);
+                    return def;
                 }
             }
             else {
                 V tmp{std::move(def)};
-                if (!zStr.empty()) {
-                    setValue(tmp, zStr);
+                if (found and !it->second.empty()) {
+                    setValue(tmp, it->second);
                 }
                 return tmp;
             }

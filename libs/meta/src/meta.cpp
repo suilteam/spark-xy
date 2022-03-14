@@ -28,9 +28,10 @@ int main(int argc, char *argv[])
     suil::args::Parser parser("suil-meta", "1.0", "Parses C++ header files and generates static meta types");
     try {
         parser(
-                Command("build", "Processes the given C++ header files and generates meta types")
-                        ({"out-dir", "The directory to generate the sources into", 'D', false})
-                        ({"dot-fix", "The postfix string to add to the generated files", 'P', false})
+                Command("generate", "Processes the given C++ header files and generates meta types")
+                        ({"out-dir", "The directory to generate the files into", 'D', false})
+                        ({"dot-fix", "Override the '.meta' postfix added to the filename", 'P', false})
+                        ({"compile-cmds", "Override the '.meta' postfix added to the filename", 'c', false})
                         (build)
                         ()
         );
@@ -46,7 +47,7 @@ int main(int argc, char *argv[])
 
 void build(const Command& cmd)
 {
-    auto outputDir = cmd.value("out-dir", ""sv);
-    auto fnameDotFix = cmd.value("dot-fix", ""sv);
-
+//    auto outputDir = cmd.value("out-dir", ""sv);
+//    auto dotFix = cmd.value("dot-fix", "meta"sv);
+//    auto compileCmds = cmd.value("compile-cmds", "compile_commands.json"sv);
 }
