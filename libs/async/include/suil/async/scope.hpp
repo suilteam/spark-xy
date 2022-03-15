@@ -20,8 +20,7 @@
 
 /**
  *
- * @author Modified by Carter from https://github.com/xuanyi-fu/xynet/blob/master/include/xynet/coroutine/async_scope.h
- * @date 2022-01-13
+ * Modified from https://github.com/xuanyi-fu/xynet/blob/master/include/xynet/coroutine/async_scope.h
  */
 
 #pragma once
@@ -196,7 +195,7 @@ namespace suil {
         }
 
         void on_work_started() noexcept {
-            assert(_count.load(std::memory_order_relaxed) != 0);
+            SUIL_ASSERT(_count.load(std::memory_order_relaxed) != 0);
             _count.fetch_add(1, std::memory_order_relaxed);
         }
 

@@ -282,7 +282,7 @@ namespace suil {
         struct addrinfo *ipv4 = nullptr;
         struct addrinfo *ipv6 = nullptr;
         struct addrinfo *it = nullptr;
-        auto deadline = after(timeout);
+        auto deadline = afterd(timeout);
 
         while (true) {
             rc = dns_ai_nextent(&it, ai);

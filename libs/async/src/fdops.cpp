@@ -41,7 +41,7 @@ namespace suil {
                 co_return -1;
             }
 
-            auto deadline = after(timeout);
+            auto deadline = afterd(timeout);
             ssize_t nRead{0};
 
             do {
@@ -69,7 +69,7 @@ namespace suil {
                 co_return -1;
             }
 
-            auto deadline = after(timeout);
+            auto deadline = afterd(timeout);
             ssize_t written{0};
 
             do {

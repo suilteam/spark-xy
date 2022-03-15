@@ -27,7 +27,9 @@ namespace suil {
 
     Thread::Thread(uint16 id)
         :_id{id}
-    {}
+    {
+        mill_list_init(&_timers);
+    }
 
     void Thread::start()
     {
@@ -120,8 +122,8 @@ namespace suil {
         auto& handle =event->handle();
         auto coro = handle.coro;
         if (handle.timerHandle) {
-            cancelTimer(*handle.timerHandle);
-            handle.timerHandle = std::nullopt;
+            cancelTimer(handle.timerHandle);
+            handle.timerHandle = {};
         }
 
         struct epoll_event ev{};
@@ -166,8 +168,9 @@ namespace suil {
 
         ec = epoll_ctl(_epfd, op,handle.fd, &ev);
         if (ec == 0) {
-            if (handle.eventDeadline != steady_clock::time_point{}) {
-                handle.timerHandle = addTimer({.timerDeadline = handle.eventDeadline, .targetEvent = event});
+            if (handle.timerHandle.dd > 0) {
+                handle.timerHandle.target = event;
+                addTimer(handle.timerHandle);
             }
             handle.state = Event::esSCHEDULED;
             record();
@@ -182,13 +185,13 @@ namespace suil {
         return false;
     }
 
-    void Thread::add(Timer *timer)
+    void Thread::add(Delay *dly)
     {
-        SUIL_ASSERT((timer->_state != Timer::tsSCHEDULED) &&
-                    (timer->_coro != nullptr));
-        timer->_state = Timer::tsSCHEDULED;
-        timer->_handle =
-                addTimer({.timerDeadline = now() + timer->_timeout, .targetTimer = timer});
+        SUIL_ASSERT((dly->_state != Delay::tsSCHEDULED) &&
+                    (dly->_coro != nullptr));
+        dly->_state = Delay::tsSCHEDULED;
+        dly->_timer.target = dly;
+        addTimer(dly->_timer);
         record();
     }
 
@@ -213,8 +216,8 @@ namespace suil {
         if (handle.state.compare_exchange_weak(state, Event::esABANDONED)) {
             // allow only 1 thread to unschedule event
             if (handle.timerHandle) {
-                cancelTimer(*handle.timerHandle);
-                handle.timerHandle = std::nullopt;
+                cancelTimer(handle.timerHandle);
+                handle.timerHandle = {};
             }
             struct epoll_event ev{};
             epoll_ctl(_epfd, EPOLL_CTL_DEL, handle.fd, &ev);
@@ -224,19 +227,14 @@ namespace suil {
         }
     }
 
-    void Thread::remove(Timer *timer)
+    void Thread::remove(Delay *dly)
     {
-        auto state = Timer::tsSCHEDULED;
-        if (timer->_state.compare_exchange_weak(state, Timer::tsSCHEDULED)) {
-            // only 1 thread allowed to unschedule event
-            SUIL_ASSERT(timer->_state == Timer::tsSCHEDULED);
-            if (timer->_handle) {
-                cancelTimer(*timer->_handle);
-                timer->_handle = std::nullopt;
-            }
-
+        auto state = Delay::tsSCHEDULED;
+        if (dly->_state.compare_exchange_weak(state, Delay::tsABANDONED)) {
+            cancelTimer(dly->_timer);
+            dly->_timer = {};
             _stats.inflight--;
-            timer->_coro.resume();
+            dly->_coro.resume();
         }
     }
 
@@ -245,82 +243,84 @@ namespace suil {
         return _stats.inflight;
     }
 
-    Timer::Handle Thread::addTimer(Timer::Entry entry)
+    void Thread::addTimer(Timer& timer)
     {
         _timersLock.lock();
-        auto it = _timers.insert(entry);
+        auto it = mill_list_begin(&_timers);
+        while (it) {
+            auto tm = mill_cont(it, Timer, item);
+            if (timer.dd < tm->dd)
+                break;
+            it = mill_list_next(it);
+        }
+        mill_list_insert(&_timers, &timer.item, it);
         _timersLock.unlock();
 
         signal();
-
-        SUIL_ASSERT(it.second);
-        return it.first;
     }
 
-    void Thread::cancelTimer(Timer::Handle handle)
+    void Thread::cancelTimer(Timer& handle)
     {
         std::lock_guard<std::mutex> lg(_timersLock);
-        if (handle != _timers.end()) {
-            _timers.erase(handle);
+        if (handle) {
+            mill_list_erase(&_timers, &handle.item);
         }
     }
 
     void Thread::fireExpiredTimers()
     {
-        auto tp = now();
+        auto tp = fastnow();
 
         _timersLock.lock();
-        while (!_timers.empty()) {
-            auto it = _timers.begin();
-            if (it->timerDeadline <= tp) {
-                auto handle = *it;
-                _timers.erase(it);
-                _timersLock.unlock();
-                if (handle.targetEvent) {
-                    auto state = Event::esSCHEDULED;
-                    auto& event = handle.targetEvent->handle();
-                    if (event.state.compare_exchange_weak(state, Event::esTIMEOUT)) {
-                        event.timerHandle = std::nullopt;
-                        struct epoll_event ev{};
-                        epoll_ctl(_epfd, EPOLL_CTL_DEL, event.fd, &ev);
-
-                        _stats.inflight--;
-                        event.coro.resume();
-                    }
-                }
-                else {
-                    auto& timer = *handle.targetTimer;
-                    auto state = Timer::tsSCHEDULED;
-                    if (timer._state.compare_exchange_weak(state, Timer::tsFIRED)) {
-                        timer._handle = std::nullopt;
-
-                        _stats.inflight--;
-                        timer._coro.resume();
-                    }
-                }
-                _timersLock.lock();
-            } else {
+        while (!mill_list_empty(&_timers)) {
+            auto it = mill_cont(mill_list_begin(&_timers), Timer, item);
+            if (it == nullptr || it->dd > tp) {
                 break;
             }
+
+            mill_list_erase(&_timers, mill_list_begin(&_timers));
+            _timersLock.unlock();
+            if (holds_alternative<Event*>(it->target)) {
+                auto state = Event::esSCHEDULED;
+                auto& event = get<Event*>(it->target)->handle();
+                if (event.state.compare_exchange_weak(state, Event::esTIMEOUT)) {
+                    struct epoll_event ev{};
+                    epoll_ctl(_epfd, EPOLL_CTL_DEL, event.fd, &ev);
+
+                    _stats.inflight--;
+                    event.coro.resume();
+                }
+            }
+            else if (holds_alternative<Delay*>(it->target)) {
+                auto& timer = *get<Delay*>(it->target);
+                auto state = Delay::tsSCHEDULED;
+                if (timer._state.compare_exchange_weak(state, Delay::tsFIRED)) {
+                    _stats.inflight--;
+                    timer._coro.resume();
+                }
+            }
+            else {
+                SUIL_ASSERT(false);
+            }
+            _timersLock.lock();
         }
         _timersLock.unlock();
     }
 
     int Thread::computeWaitTimeout()
     {
-        _timersLock.lock();
-        auto it = _timers.begin();
-        if (it != _timers.end()) {
-            _timersLock.unlock();
-            auto at = std::chrono::duration_cast<std::chrono::milliseconds>(it->timerDeadline - now()).count();
-            if (at < 0) {
-                return 0;
-            }
-            return int(at);
-        }
-        _timersLock.unlock();
+        std::lock_guard<std::mutex> lg{_timersLock};
 
-        return -1;
+        if (!mill_list_begin(&_timers)) {
+            return -1;
+        }
+
+        auto tm = mill_cont(mill_list_begin(&_timers), Timer, item);
+        auto at =  tm->dd - fastnow();
+        if (at <= 0) {
+            return 0;
+        }
+        return int(at);
     }
 
     Thread::Stats Thread::getStats() const

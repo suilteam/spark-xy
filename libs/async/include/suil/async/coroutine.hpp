@@ -135,5 +135,5 @@ namespace suil {
 
     int16 qid();
 
-    constexpr uint16 AFFINITY_ANY = UINT16_MAX;
+    constexpr uint16 THREAD_ID_ANY = UINT16_MAX;
 }

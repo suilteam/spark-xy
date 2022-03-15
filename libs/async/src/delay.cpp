@@ -13,45 +13,39 @@
 
 namespace suil {
 
-    Timer::Timer(milliseconds timeout, uint16_t tid)
-            : _timeout{timeout}, _tid{tid}
-    {}
+    Delay::Delay(int64_t timeout, uint16_t tid)
+        : _tID{tid}
+    {
+        _timer.dd = fastnow() + timeout;
+    }
 
-    Timer::Timer(Timer &&other) noexcept
+    Delay::Delay(Delay &&other) noexcept
     {
         Ego = std::move(other);
     }
 
-    Timer& Timer::operator=(Timer &&other) noexcept
+    Delay& Delay::operator=(Delay &&other) noexcept
     {
-        if (this == &other) {
+        if (this != &other) {
             SUIL_ASSERT(_state == tsCREATED);
             _state = other._state.exchange(tsABANDONED);
-            _timeout = std::exchange(other._timeout, -1ms);
             _coro = std::exchange(other._coro, nullptr);
-            _tid = std::exchange(other._tid, 0);
+            _tID = std::exchange(other._tID, 0);
+            _timer = std::exchange(other._timer, {});
         }
 
         return Ego;
     }
 
-    Timer::~Timer() noexcept
+    Delay::~Delay() noexcept
     {
         SUIL_ASSERT(_state == tsCREATED);
     }
 
-    void Timer::await_suspend(std::coroutine_handle<> coroutine) noexcept
+    void Delay::await_suspend(std::coroutine_handle<> coroutine) noexcept
     {
         SUIL_ASSERT(_state == tsCREATED);
         _coro = coroutine;
-        Scheduler::instance().schedule(this, _tid);
-    }
-
-    bool Timer::Entry::operator<(const Entry &rhs) const
-    {
-        return (timerDeadline < rhs.timerDeadline) ||
-               ((timerDeadline == rhs.timerDeadline) &&
-                ((targetEvent != nullptr && targetEvent != rhs.targetEvent) ||
-                 (targetTimer != nullptr && targetTimer != rhs.targetTimer)));
+        Scheduler::instance().schedule(this, _tID);
     }
 }

@@ -188,6 +188,10 @@ namespace suil {
         return timeout <= 0ms? steady_clock::time_point{} : steady_clock::now() + timeout;
     }
 
+    int64_t afterd(milliseconds timeout = DELAY_INF);
+
+    int64_t fastnow();
+
     constexpr int INVALID_FD{-1};
 
     template<typename T>

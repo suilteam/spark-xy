@@ -33,9 +33,10 @@ namespace suil {
 
         static Scheduler& instance();
         static void init(uint16 threadCount);
-        void schedule(std::coroutine_handle<> coro, uint16 tid = AFFINITY_ANY);
-        void schedule(Event *event, uint16 tid = AFFINITY_ANY);
-        void schedule(Timer *timer, uint16 tid = AFFINITY_ANY);
+        void schedule(std::coroutine_handle<> coro, uint16 tid = THREAD_ID_ANY);
+        void schedule(Event *event, uint16 tid = THREAD_ID_ANY);
+        void schedule(Delay *timer, uint16 tid = THREAD_ID_ANY);
+        uint16 threadCount() { return _threadCount; }
         void dumpStats();
         ~Scheduler();
     private:

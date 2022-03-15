@@ -66,7 +66,7 @@ namespace suil {
 
     void Scheduler::schedule(std::coroutine_handle<> coro, uint16 tid)
     {
-        if (tid == AFFINITY_ANY) {
+        if (tid == THREAD_ID_ANY) {
             tid = minLoadSchedule();
         }
         SUIL_ASSERT(tid < _threadCount);
@@ -76,7 +76,7 @@ namespace suil {
 
     void Scheduler::schedule(Event *event, uint16 tid)
     {
-        if (tid == AFFINITY_ANY) {
+        if (tid == THREAD_ID_ANY) {
             tid = minLoadSchedule();
         }
 
@@ -85,9 +85,9 @@ namespace suil {
         _totalScheduled++;
     }
 
-    void Scheduler::schedule(Timer *timer, uint16 tid)
+    void Scheduler::schedule(Delay *timer, uint16 tid)
     {
-        if (tid == AFFINITY_ANY) {
+        if (tid == THREAD_ID_ANY) {
             tid = minLoadSchedule();
         }
         SUIL_ASSERT(tid < _threadCount);

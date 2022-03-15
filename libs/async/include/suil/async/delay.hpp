@@ -11,14 +11,24 @@
 #pragma once
 
 #include <suil/async/coroutine.hpp>
+#include <suil/async/detail/list.hpp>
 
 #include <optional>
 #include <set>
+#include <variant>
 
 namespace suil {
     struct Event;
+    class  Delay;
 
-    class Timer {
+    struct Timer {
+        struct mill_list_item item{};
+        int64_t dd{0};
+        std::variant<std::monostate, Event*, Delay*> target{};
+        inline operator bool() const { return !holds_alternative<std::monostate>(target); }
+    };
+
+    class Delay {
     public:
         typedef enum {
             tsCREATED,
@@ -27,28 +37,13 @@ namespace suil {
             tsFIRED
         } State;
 
-        struct Entry {
-            steady_clock::time_point timerDeadline;
-            Event *targetEvent{nullptr};
-            Timer *targetTimer{nullptr};
+        Delay(int64_t timeout, uint16_t tid = THREAD_ID_ANY);
+        ~Delay() noexcept;
 
-            bool operator<(const Entry& rhs) const;
+        MOVE_CTOR(Delay) noexcept;
+        MOVE_ASSIGN(Delay) noexcept;
 
-            bool operator<=(const std::chrono::steady_clock::time_point& tp) const {
-                return timerDeadline <= tp;
-            }
-
-        };
-        using List = std::set<Entry>;
-        using Handle = List::iterator;
-
-        Timer(milliseconds timeout, uint16_t tid = AFFINITY_ANY);
-        ~Timer() noexcept;
-
-        MOVE_CTOR(Timer) noexcept;
-        MOVE_ASSIGN(Timer) noexcept;
-
-        DISABLE_COPY(Timer);
+        DISABLE_COPY(Delay);
 
         bool await_ready() const noexcept { return _state == tsFIRED; }
 
@@ -59,15 +54,14 @@ namespace suil {
     private:
         friend struct Scheduler;
         friend struct Thread;
+        Timer _timer{};
         std::atomic<State> _state{tsCREATED};
-        milliseconds _timeout{0ms};
         std::coroutine_handle<> _coro{nullptr};
-        std::optional<Handle> _handle{};
-        uint16 _tid{AFFINITY_ANY};
+        uint16 _tID{THREAD_ID_ANY};
     };
 
     inline auto asyncDelay(milliseconds ms) {
-        return Timer{ms};
+        return Delay{ms.count()};
     }
 }
 

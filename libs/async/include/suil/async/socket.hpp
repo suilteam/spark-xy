@@ -25,8 +25,7 @@ namespace suil {
         Socket& operator=(Socket&&) noexcept;
         virtual ~Socket() noexcept;
 
-        Socket(const Socket&) = delete;
-        Socket& operator=(const Socket&) = delete;
+        DISABLE_COPY(Socket);
 
         virtual void close() noexcept;
         virtual int detach();
@@ -42,10 +41,10 @@ namespace suil {
             return send(buf.data(), buf.size(), timeout);
         }
 
-        auto sendn(const void* buf, std::size_t size, milliseconds timeout = DELAY_INF) -> Task<int>;
+        auto sendAll(const void* buf, std::size_t size, milliseconds timeout = DELAY_INF) -> Task<int>;
 
-        auto sendn(const std::span<const char>& buf, milliseconds timeout = DELAY_INF) {
-            return sendn(buf.data(), buf.size(), timeout);
+        auto sendAll(const std::span<const char>& buf, milliseconds timeout = DELAY_INF) {
+            return sendAll(buf.data(), buf.size(), timeout);
         }
 
         auto receive(void *buf, std::size_t size, milliseconds timeout = DELAY_INF) -> Task<int>;
@@ -54,11 +53,13 @@ namespace suil {
             return receive(buf.data(), buf.size(), timeout);
         }
 
-        auto recvn(void* buf, std::size_t size, milliseconds timeout = DELAY_INF) -> Task<int>;
+        auto receiveAll(void* buf, std::size_t size, milliseconds timeout = DELAY_INF) -> Task<int>;
 
-        auto recvn(std::span<char> buf, milliseconds timeout = DELAY_INF) {
-            return recvn(buf.data(), buf.size(), timeout);
+        auto receiveAll(std::span<char> buf, milliseconds timeout = DELAY_INF) {
+            return receiveAll(buf.data(), buf.size(), timeout);
         }
+
+        void bindToThread(uint16 tID);
 
     protected:
         Socket(int fd, int err) : _fd{fd}, _error{0}
@@ -67,6 +68,7 @@ namespace suil {
         Socket() = default;
 
         int _fd{INVALID_FD};
-        int _error{0};
+        int16  _error{0};
+        uint16  _tID{THREAD_ID_ANY};
     };
 }

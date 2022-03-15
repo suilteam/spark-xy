@@ -17,13 +17,16 @@
 
 namespace suil {
 
+    /**
+     * @brief An abstraction over a TCP socket
+     */
     class TcpSocket : public Socket {
     public:
         TcpSocket() noexcept = default;
-        TcpSocket(int fd, int err = 0) : Socket(fd, err)
-        {}
 
-        virtual ~TcpSocket() noexcept = default;
+        explicit TcpSocket(int fd, int err = 0, uint16 tId = THREAD_ID_ANY);
+
+        ~TcpSocket() noexcept override = default;
 
         TcpSocket(TcpSocket&& other) noexcept;
         TcpSocket& operator=(TcpSocket&& other) noexcept;
@@ -32,9 +35,11 @@ namespace suil {
         TcpSocket& operator=(const TcpSocket&) = delete;
 
         static Task<TcpSocket> connect(const SocketAddress& addr, milliseconds timeout = DELAY_INF);
+        static Task<TcpSocket> connect(const SocketAddress& addr, uint16 queueID, milliseconds timeout = DELAY_INF);
 
         operator bool() const { return isValid(); }
 
+        [[nodiscard]]
         const SocketAddress& address() const { return _address; }
 
         void close() noexcept override;
@@ -56,8 +61,15 @@ namespace suil {
 
         operator bool() const { return _fd > 0; }
 
-        auto accept(milliseconds timeout = DELAY_INF) -> Task<TcpSocket>;
+        auto acceptOn(uint16 tId, milliseconds timeout = DELAY_INF) -> Task<TcpSocket>;
+
+        auto accept(milliseconds timeout = DELAY_INF) -> Task<TcpSocket> {
+            return acceptOn(THREAD_ID_ANY, timeout);
+        }
+
         void close();
+
+        [[nodiscard]]
         int getLastError() const { return _error; }
 
         static TcpListener listen(const SocketAddress& addr, int backlog);
@@ -71,12 +83,4 @@ namespace suil {
         int _port{0};
         int _error{0};
     };
-
-    inline auto tcpconnect(const SocketAddress& addr, std::chrono::milliseconds timeout = DELAY_INF) {
-        return TcpSocket::connect(addr, timeout);
-    }
-
-    inline auto tcplisten(const SocketAddress& addr, int backlog) {
-        return TcpListener::listen(addr, backlog);
-    }
 }

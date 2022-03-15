@@ -147,7 +147,7 @@ namespace suil {
         return awaiter_t{scheduler, tid};
     }
 
-    inline auto schedule(uint16 tid = AFFINITY_ANY) {
+    inline auto schedule(uint16 tid = THREAD_ID_ANY) {
         return schedule(Scheduler::instance(), tid);
     }
 

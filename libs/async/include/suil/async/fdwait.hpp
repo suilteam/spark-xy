@@ -33,16 +33,15 @@ namespace suil {
         } IO;
 
         struct Handle {
+            Timer timerHandle;
             int fd{INVALID_FD};
-            uint16_t tid{AFFINITY_ANY};
+            uint16_t tid{THREAD_ID_ANY};
             std::atomic<State> state{esCREATED};
-            steady_clock::time_point eventDeadline{};
             IO  ion{IN};
-            std::optional<Timer::Handle> timerHandle{std::nullopt};
             std::coroutine_handle<> coro{nullptr};
         };
 
-        Event(int fd, uint16_t affinity = AFFINITY_ANY) noexcept;
+        explicit Event(int fd, uint16_t affinity = THREAD_ID_ANY) noexcept;
 
         ~Event() noexcept;
 
@@ -63,9 +62,9 @@ namespace suil {
             return _handle.state.exchange(esCREATED);
         }
 
-        Event& operator()(steady_clock::time_point dd) {
+        Event& operator()(int64_t dd) {
             SUIL_ASSERT(_handle.state == esCREATED);
-            _handle.eventDeadline = dd;
+            _handle.timerHandle.dd = dd;
             return Ego;
         }
 
@@ -75,7 +74,7 @@ namespace suil {
             return Ego;
         }
 
-        uint16 affinity() const { return _handle.tid; }
+        [[nodiscard]] uint16 tid() const { return _handle.tid; }
         Handle& handle() { return _handle; }
 
     private:
@@ -83,9 +82,9 @@ namespace suil {
         Handle _handle{};
     };
 
-    inline auto fdwait(int fd, Event::IO io, steady_clock::time_point dd = {})
+    inline auto fdwait(int fd, Event::IO io, int64_t dd = -1, uint16 affinity = THREAD_ID_ANY)
     {
-        Event event(fd, AFFINITY_ANY);
+        Event event(fd, affinity);
         event(io)(dd);
         return event;
     }

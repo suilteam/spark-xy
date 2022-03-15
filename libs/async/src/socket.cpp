@@ -18,7 +18,8 @@ namespace suil {
 
     Socket::Socket(Socket&& other) noexcept
         : _fd{std::exchange(other._fd, INVALID_FD)},
-          _error{std::exchange(other._error, 0)}
+          _error{std::exchange(other._error, 0)},
+          _tID{std::exchange(other._tID, THREAD_ID_ANY)}
     {}
 
     Socket& Socket::operator=(Socket&& other) noexcept
@@ -26,13 +27,14 @@ namespace suil {
         if (this != std::addressof(other)) {
             _fd = std::exchange(other._fd, INVALID_FD);
             _error = std::exchange(other._error, 0);
+            _tID = std::exchange(other._tID, THREAD_ID_ANY);
         }
         return *this;
     }
 
     Socket::~Socket() noexcept
     {
-        this->close();
+        Socket::close();
     }
 
     void Socket::close() noexcept
@@ -51,7 +53,7 @@ namespace suil {
 
     auto Socket::send(const void* buf, std::size_t size, milliseconds timeout) -> Task<int>
     {
-        auto deadline = after(timeout);
+        auto deadline = afterd(timeout);
         ssize_t nSent{0};
         do {
             nSent = ::send(_fd, buf, size, MSG_NOSIGNAL);
@@ -65,9 +67,9 @@ namespace suil {
                     break;
                 }
 
-                auto ev = co_await fdwait(_fd, Event::OUT, deadline);
+                auto ev = co_await fdwait(_fd, Event::OUT, deadline, _tID);
                 if (ev != Event::esFIRED) {
-                    _error = (ev ==  Event::esTIMEOUT? ETIMEDOUT : errno);
+                    _error = int16(ev ==  Event::esTIMEOUT? ETIMEDOUT : errno);
                     break;
                 }
 
@@ -79,9 +81,9 @@ namespace suil {
         co_return int(nSent);
     }
 
-    auto Socket::sendn(const void* buf, std::size_t size, milliseconds timeout) -> Task<int>
+    auto Socket::sendAll(const void* buf, std::size_t size, milliseconds timeout) -> Task<int>
     {
-        auto deadline = after(timeout);
+        auto deadline = afterd(timeout);
         ssize_t nSent{0}, rc{0};
         do {
             rc = ::send(_fd, &((char  *)buf)[nSent], (size - nSent), MSG_NOSIGNAL);
@@ -96,9 +98,9 @@ namespace suil {
                     break;
                 }
 
-                auto ev = co_await fdwait(_fd, Event::OUT, deadline);
+                auto ev = co_await fdwait(_fd, Event::OUT, deadline, _tID);
                 if (ev != Event::esFIRED) {
-                    _error = (ev ==  Event::esTIMEOUT? ETIMEDOUT : errno);
+                    _error = int16(ev ==  Event::esTIMEOUT? ETIMEDOUT : errno);
                     nSent = -1;
                     break;
                 }
@@ -118,7 +120,7 @@ namespace suil {
 
     auto Socket::receive(void* buf, std::size_t size, milliseconds timeout) -> Task<int>
     {
-        auto deadline = after(timeout);
+        auto deadline = afterd(timeout);
         ssize_t nReceived{0};
         do {
             nReceived = ::recv(_fd, buf, size, MSG_NOSIGNAL);
@@ -132,9 +134,9 @@ namespace suil {
                     break;
                 }
 
-                auto ev = co_await fdwait(_fd, Event::IN, deadline);
+                auto ev = co_await fdwait(_fd, Event::IN, deadline, _tID);
                 if (ev != Event::esFIRED) {
-                    _error = (ev ==  Event::esTIMEOUT? ETIMEDOUT : errno);
+                    _error = int16(ev ==  Event::esTIMEOUT? ETIMEDOUT : errno);
                     break;
                 }
 
@@ -149,9 +151,9 @@ namespace suil {
         co_return int(nReceived);
     }
 
-    auto Socket::recvn(void* buf, std::size_t size, milliseconds timeout) -> Task<int>
+    auto Socket::receiveAll(void* buf, std::size_t size, milliseconds timeout) -> Task<int>
     {
-        auto deadline = after(timeout);
+        auto deadline = afterd(timeout);
         ssize_t nReceived{0}, rc{0};
         do {
             rc = ::recv(_fd, &((char *)buf)[nReceived], (size - nReceived), MSG_NOSIGNAL);
@@ -166,9 +168,9 @@ namespace suil {
                     break;
                 }
 
-                auto ev = co_await fdwait(_fd, Event::IN, deadline);
+                auto ev = co_await fdwait(_fd, Event::IN, deadline, _tID);
                 if (ev != Event::esFIRED) {
-                    _error = (ev ==  Event::esTIMEOUT? ETIMEDOUT : errno);
+                    _error = int16(ev ==  Event::esTIMEOUT? ETIMEDOUT : errno);
                     nReceived = -1;
                     break;
                 }
@@ -184,5 +186,11 @@ namespace suil {
         } while (nReceived  < size);
 
         co_return int(nReceived);
+    }
+
+    void Socket::bindToThread(uint16 tID)
+    {
+        SUIL_ASSERT(tID == THREAD_ID_ANY or tID < Scheduler::instance().threadCount());
+        _tID = tID;
     }
 }

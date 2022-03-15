@@ -26,13 +26,13 @@ set(SUIL_ASYNC_SOURCES
         src/fdwait.cpp
         src/fdops.cpp
         src/addr.cpp
+        src/list.cpp
         src/mutex.cpp
         src/scheduler.cpp
         src/socket.cpp
         src/sync.cpp
         src/tcp.cpp
         src/thread.cpp
-        src/workqueue.cpp
         src/dns/dns.c)
 
 # Add and configure utils library

@@ -14,7 +14,7 @@
 namespace suil {
 
     Event::Event(int fd, uint16_t affinity) noexcept
-            : _handle{fd, affinity}
+            : _handle{{}, fd, affinity}
     {
         SUIL_ASSERT(fd != INVALID_FD && "Poll events needs a valid file descriptor");
     }
@@ -31,8 +31,7 @@ namespace suil {
             _handle.state = other._handle.state.exchange(esABANDONED);
             _handle.tid = std::exchange(other._handle.tid, 0);
             _handle.fd = std::exchange(other._handle.fd, INVALID_FD);
-            _handle.eventDeadline = std::exchange(other._handle.eventDeadline, {});
-            _handle.timerHandle = std::exchange(other._handle.timerHandle, std::nullopt);
+            _handle.timerHandle = std::exchange(other._handle.timerHandle, {});
             _handle.coro = std::exchange(other._handle.coro, nullptr);
         }
 

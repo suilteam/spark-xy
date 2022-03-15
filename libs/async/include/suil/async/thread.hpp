@@ -30,27 +30,29 @@ namespace suil {
         DISABLE_MOVE(Thread);
 
         void start();
-        Stats getStats() const;
-        void abort();
-        bool isActive() const { return _active; }
+
+        [[nodiscard]] Stats getStats() const;
+        [[nodiscard]] bool isActive() const { return _active; }
+        [[nodiscard]] uint64 load() const;
+
         void schedule(std::coroutine_handle<> coro);
         bool add(Event *event);
-        void add(Timer *timer);
+        void add(Delay *timer);
         void remove(Event *event);
-        void remove(Timer *timer);
-        uint64 load() const;
+        void remove(Delay *timer);
+        void abort();
         ~Thread();
 
     private:
         void signal();
         void handleEvent(Event *event);
-        void cancelTimer(Timer::Handle handle);
-        Timer::Handle addTimer(Timer::Entry entry);
+        void cancelTimer(Timer& handle);
+        void addTimer(Timer& entry);
         void fireExpiredTimers();
         int computeWaitTimeout();
         void handleThreadEvent();
         void record();
-        Timer::List _timers;
+        mill_list _timers{};
         std::mutex _timersLock;
         uint16_t _id{0};
         Stats _stats{};

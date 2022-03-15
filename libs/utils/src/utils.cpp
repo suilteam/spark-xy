@@ -14,7 +14,65 @@
 #include <fcntl.h>
 #include <openssl/rand.h>
 
+/* 1 millisecond expressed in CPU ticks. The value is chosen is such a way that
+   it works reasonably well for CPU frequencies above 500MHz. On significanly
+   slower machines you may wish to reconsider. */
+#define MILL_CLOCK_PRECISION 1000000
+
+
 namespace {
+
+    int64_t mill_os_time() {
+#if defined __APPLE__
+        if (mill_slow(!mill_mtid.denom))
+        mach_timebase_info(&mill_mtid);
+        uint64_t ticks = mach_absolute_time();
+        return (int64_t)(ticks * mill_mtid.numer / mill_mtid.denom / 1000000);
+#elif defined CLOCK_MONOTONIC
+        timespec ts{};
+        int rc = clock_gettime(CLOCK_MONOTONIC, &ts);
+        SUIL_ASSERT(rc == 0);
+        return ((int64_t)ts.tv_sec) * 1000 + (((int64_t)ts.tv_nsec) / 1000000);
+#else
+        struct timeval tv;
+        int rc = gettimeofday(&tv, NULL);
+        assert(rc == 0);
+        return ((int64_t)tv.tv_sec) * 1000 + (((int64_t)tv.tv_usec) / 1000);
+#endif
+    }
+
+    inline int64_t mill_now_() {
+#if (defined __GNUC__ || defined __clang__) && \
+      (defined __i386__ || defined __x86_64__)
+        /* Get the timestamp counter. This is time since startup, expressed in CPU
+           cycles. Unlike gettimeofday() or similar function, it's extremely fast -
+           it takes only few CPU cycles to evaluate. */
+        uint32_t low;
+        uint32_t high;
+        __asm__ volatile("rdtsc" : "=a" (low), "=d" (high));
+        auto tsc = (int64_t)((uint64_t)high << 32 | low);
+        /* These global variables are used to hold the last seen timestamp counter
+           and last seen time measurement. We'll initilise them the first time
+           this function is called. */
+        static __thread int64_t last_tsc = -1;
+        static __thread int64_t last_now = -1;
+        if(unlikely(last_tsc < 0)) {
+            last_tsc = tsc;
+            last_now = mill_os_time();
+        }
+        /* If TSC haven't jumped back or progressed more than 1/2 ms, we can use
+           the cached time value. */
+        if(likely(tsc - last_tsc <= (MILL_CLOCK_PRECISION / 2) && tsc >= last_tsc))
+            return last_now;
+        /* It's more than 1/2 ms since we've last measured the time.
+           We'll do a new measurement now. */
+        last_tsc = tsc;
+        last_now = mill_os_time();
+        return last_now;
+#else
+        return mill_os_time();
+#endif
+    }
 
     inline bool isCharIn(const char* str, char c) {
         return  strchr(str, c) != nullptr;
@@ -236,6 +294,13 @@ namespace suil {
         return out;
     }
 
+    int64_t afterd(milliseconds timeout)
+    {
+        auto ms = timeout.count();
+        return ms <= 0? -1: mill_now_() + timeout.count();
+    }
+
+    int64_t fastnow() { return mill_now_(); }
 }
 
 #ifdef SUIL_UNITTEST

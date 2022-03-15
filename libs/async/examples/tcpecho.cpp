@@ -32,7 +32,7 @@ auto handler(int id, TcpSocket sock) -> Task<>
         char buf[1024];
         auto ec = co_await sock.receive({buf, sizeof(buf)});
         if (ec > 0) {
-            ec = co_await sock.send({buf, std::size_t(ec)}, 10s);
+            ec = co_await sock.send({buf, std::size_t(ec)});
         }
 
         if (ec == 0) {
@@ -48,16 +48,16 @@ auto handler(int id, TcpSocket sock) -> Task<>
 auto dumpFairness() -> Task<>
 {
     while (true) {
-        delay(20s);
+        delay(5s);
         Scheduler::instance().dumpStats();
     }
 }
 
-auto acceptor(TcpListener& listener) -> Task<>
+auto accept(int thread, TcpListener& listener) -> Task<>
 {
     AsyncScope connectionScope;
-
     int i = 0;
+
     while (listener) {
         auto sock = co_await listener.accept();
         if (!sock) {
@@ -78,7 +78,7 @@ auto acceptor(int threads, TcpListener& ls) -> VoidTask<>
 
     scope.spawn(dumpFairness());
     for (int i = 0; i < threads; i++) {
-        scope.spawn(acceptor(ls));
+        scope.spawn(accept(i, ls));
     }
 
     co_await scope.join();
@@ -97,13 +97,11 @@ void multiThreadServer(int threads = 1)
 #else
 auto connection(int id, long roundTrips) -> Task<>
 {
-    co_await schedule();
     auto conn = co_await TcpSocket::connect(SocketAddress::local("0.0.0.0", SYX_TCP_PORT));
     SUIL_ASSERT(conn);
 
 #define MESSAGE     "Hello World"
 #define MESSAGE_LEN (sizeof(MESSAGE)-1)
-
     for (int i = 0; i < roundTrips; ++i) {
         auto ec = co_await conn.send({MESSAGE, MESSAGE_LEN});
         SUIL_ASSERT(ec == MESSAGE_LEN);
@@ -152,7 +150,7 @@ int main(int argc, const char *argv[])
         threads = strtol(argv[1], nullptr, 10);
     }
     Scheduler::init(threads);
-    multiThreadServer(1);
+    multiThreadServer(threads);
 #else
     constexpr const char* usage = "Usage: syx-tcp-echo-cli <conns> <roundtrips>\n";
     if (argc < 3) {

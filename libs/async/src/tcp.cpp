@@ -46,6 +46,12 @@ namespace {
 
 namespace suil {
 
+    TcpSocket::TcpSocket(int fd, int err, uint16 tId)
+        : Socket(fd, err)
+    {
+        bindToThread(tId);
+    }
+
     TcpSocket::TcpSocket(TcpSocket &&other) noexcept
         : Socket(std::move(other)),
           _address{other._address}
@@ -60,7 +66,7 @@ namespace suil {
         return *this;
     }
 
-    Task<TcpSocket> TcpSocket::connect(const SocketAddress& addr, milliseconds timeout)
+    Task<TcpSocket> TcpSocket::connect(const SocketAddress& addr, uint16 queueID, milliseconds timeout)
     {
         int s = socket(addr.family(), SOCK_STREAM, 0);
         if (s == -1) {
@@ -74,12 +80,12 @@ namespace suil {
         if (rc != 0) {
             SUIL_ASSERT(rc == -1);
             if(errno != EINPROGRESS) {
-                co_return TcpSocket{s, errno};
+                co_return TcpSocket{s, errno, queueID};
             }
 
-            auto ev = co_await fdwait(s, Event::OUT, after(timeout));
+            auto ev = co_await fdwait(s, Event::OUT, afterd(timeout), queueID);
             if (ev != Event::esFIRED) {
-                co_return TcpSocket{s, errno};
+                co_return TcpSocket{s, errno, queueID};
             }
 
             int err;
@@ -89,18 +95,23 @@ namespace suil {
                 err = errno;
                 ::close(s);
                 errno = err;
-                co_return TcpSocket{s, errno};
+                co_return TcpSocket{s, errno, queueID};
             }
 
             if(err != 0) {
                 ::close(s);
                 errno = err;
-                co_return TcpSocket{s, errno};
+                co_return TcpSocket{s, errno, queueID};
             }
         }
 
         errno = 0;
-        co_return TcpSocket{s};
+        co_return TcpSocket{s, 0, queueID};
+    }
+
+    Task<TcpSocket> TcpSocket::connect(const SocketAddress& addr, milliseconds timeout)
+    {
+        return connect(addr, THREAD_ID_ANY, timeout);
     }
 
     void TcpSocket::close() noexcept
@@ -147,11 +158,11 @@ namespace suil {
         }
     }
 
-    auto TcpListener::accept(std::chrono::milliseconds timeout) -> Task<TcpSocket>
+    auto TcpListener::acceptOn(uint16 tId, std::chrono::milliseconds timeout) -> Task<TcpSocket>
     {
         socklen_t addrlen;
         TcpSocket sock{};
-        auto dd = after(timeout);
+        auto dd = afterd(timeout);
         while (true) {
             addrlen = SocketAddress::MAX_IP_ADDRESS_SIZE;
             int as = ::accept(_fd, (struct sockaddr *) sock._address._data, &addrlen);
@@ -168,7 +179,7 @@ namespace suil {
                 break;
             }
 
-            auto rc = co_await  fdwait(_fd, Event::IN, dd);
+            auto rc = co_await  fdwait(_fd, Event::IN, dd, tId);
             if (rc != Event::esFIRED) {
                 _error = errno;
                 break;
